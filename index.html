@@ -1,0 +1,2712 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;padding:0}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>CCO Contumil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen operator console — header strip, mimic wall (canvas) left, operator panel right; stacks on phones.
+   Deliberately single-theme (control-room dark), every colour set explicitly. */
+:root {
+  color-scheme: dark;
+  --wall: #04070c;          /* mimic panel ground */
+  --panel: #0b1119;         /* console surfaces */
+  --panel-2: #111a25;
+  --line: #1e2a38;          /* hairlines */
+  --ink: #d8e1ea;           /* primary text */
+  --ink-dim: #8394a6;
+  --ink-faint: #56677a;
+  --ip: #3fb0c9;            /* IP cyan accent — selection & interaction */
+  --ok: #2fdc6a;            /* route set / clear */
+  --warn: #ffc93a;          /* caution */
+  --bad: #ff4848;           /* occupied / stop / alarm */
+  --fault: #ff9a1f;
+  --radio: #b48cff;
+  --c-urb: #3fd08a; --c-reg: #5aa9ff; --c-ld: #ff7ad1; --c-int: #ffd23a; --c-merc: #d7955a; --c-esp: #c3a6ff; --c-soc: #f4f7fa;
+  --f-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --f-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--wall); color: var(--ink); font: 14px/1.4 var(--f-body); overflow: hidden; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+button { font: inherit; color: inherit; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--ip); outline-offset: 1px; }
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+
+/* header */
+.top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--panel); border-bottom: 1px solid var(--line);
+  padding-block: 6px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.brand { display: flex; align-items: baseline; gap: 8px; font-family: var(--f-display); letter-spacing: .04em; }
+.brand b { font-size: 20px; font-weight: 700; color: var(--ink); }
+.brand span { font-size: 13px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .12em; }
+.clock { font-family: var(--f-mono); font-size: 24px; font-weight: 600; color: var(--warn); letter-spacing: .02em; font-variant-numeric: tabular-nums; min-width: 7.2ch; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { background: transparent; border: 0; border-right: 1px solid var(--line); padding: 4px 9px; cursor: pointer; font-family: var(--f-mono); font-size: 12px; color: var(--ink-dim); }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--ip); color: #021016; font-weight: 600; }
+.seg button:hover:not(.on) { background: var(--panel-2); color: var(--ink); }
+.kpis { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.kpi { display: flex; flex-direction: column; padding: 2px 10px; border-left: 2px solid var(--line); }
+.kpi small { font-family: var(--f-display); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+.kpi b { font-family: var(--f-mono); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.kpi.bad { border-left-color: var(--bad); } .kpi.bad b { color: var(--bad); }
+.kpi.good b { color: var(--ok); }
+
+/* main */
+.main { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+.wall { position: relative; min-width: 0; min-height: 0; background: var(--wall); }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+.desks { position: absolute; top: 10px; left: max(10px, env(safe-area-inset-left, 0px)); display: flex; gap: 6px; flex-wrap: wrap; }
+.desk { background: rgba(11,17,25,.88); border: 1px solid var(--line); border-radius: 4px; padding: 4px 9px; cursor: pointer; font-family: var(--f-display); font-size: 13px; letter-spacing: .05em; color: var(--ink-dim); display: flex; gap: 7px; align-items: center; }
+.desk:hover { color: var(--ink); border-color: var(--ip); }
+.desk i { font-style: normal; font-family: var(--f-mono); font-size: 10px; padding: 1px 5px; border-radius: 3px; }
+.desk i.man { background: var(--warn); color: #1a1200; } .desk i.aut { background: var(--panel-2); color: var(--ink-faint); border: 1px solid var(--line); }
+.hint { position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); bottom: 10px; max-width: min(560px, 60%); background: rgba(11,17,25,.9); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; font-size: 12.5px; color: var(--ink-dim); pointer-events: none; }
+.hint b { color: var(--ip); font-weight: 600; }
+#mini { position: absolute; right: 10px; bottom: 10px; width: 240px; height: 76px; background: rgba(4,7,12,.92); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.toast { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); background: #2a0b0e; border: 1px solid var(--bad); color: #ffd7d7; padding: 6px 14px; border-radius: 4px; font-size: 13px; max-width: 80%; display: none; }
+.toast.radio { background: #1a1230; border-color: var(--radio); color: #e4d8ff; }
+.ctx { position: absolute; background: var(--panel); border: 1px solid var(--ip); border-radius: 4px; min-width: 230px; box-shadow: 0 8px 24px rgba(0,0,0,.5); padding: 4px 0; display: none; z-index: 5; }
+.ctx header { padding: 5px 12px; font-family: var(--f-display); font-size: 14px; letter-spacing: .05em; color: var(--ip); border-bottom: 1px solid var(--line); }
+.ctx button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+.ctx button:hover { background: var(--panel-2); }
+.ctx button:disabled { color: var(--ink-faint); cursor: default; background: none; }
+
+/* side panel */
+.side { background: var(--panel); border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 4px 7px; cursor: pointer; font-family: var(--f-display); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+.tabs button.on { color: var(--ink); border-bottom-color: var(--ip); }
+.tabs button em { font-style: normal; font-family: var(--f-mono); font-size: 10px; background: var(--bad); color: #fff; border-radius: 8px; padding: 0 5px; margin-left: 3px; }
+.pane { overflow: auto; min-height: 0; padding: 10px 12px 16px; }
+.pane[hidden] { display: none !important; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-family: var(--f-display); font-weight: 600; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); padding: 4px 4px; border-bottom: 1px solid var(--line); position: sticky; top: -10px; background: var(--panel); }
+td { padding: 4px 4px; border-bottom: 1px solid #141e2a; vertical-align: top; }
+td.num, td.t { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.fixed { table-layout: fixed; }
+.ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub { font-size: 11.5px; color: var(--ink-faint); }
+tr.row { cursor: pointer; } tr.row:hover td { background: var(--panel-2); } tr.sel td { background: #0f2830; }
+tr.future td { color: var(--ink-faint); }
+.tag { display: inline-block; font-family: var(--f-mono); font-size: 10px; padding: 0 4px; border-radius: 3px; color: #04070c; font-weight: 600; }
+.urb { background: var(--c-urb); } .reg { background: var(--c-reg); } .ld { background: var(--c-ld); } .int { background: var(--c-int); } .merc { background: var(--c-merc); }
+.esp { background: var(--c-esp); } .soc { background: var(--c-soc); }
+.late { color: var(--warn); } .vlate { color: var(--bad); } .ontime { color: var(--ok); }
+.sec { font-family: var(--f-display); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); margin: 12px 0 6px; }
+.card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; }
+.card h3 { margin: 0 0 2px; font-family: var(--f-display); font-size: 22px; letter-spacing: .03em; display: flex; gap: 8px; align-items: center; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12.5px; margin-top: 8px; }
+.kv span:nth-child(odd) { color: var(--ink-faint); } .kv span:nth-child(even) { font-family: var(--f-mono); }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.btn { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 12.5px; }
+.btn:hover { border-color: var(--ip); } .btn.pri { background: var(--ip); color: #021016; border-color: var(--ip); font-weight: 600; }
+.btn.warn { border-color: var(--warn); color: var(--warn); }
+.log { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.log li { display: grid; grid-template-columns: 4.2ch 1fr; gap: 8px; padding: 5px 0 5px 8px; border-bottom: 1px solid #141e2a; border-left: 2px solid transparent; }
+.log li time { font-family: var(--f-mono); color: var(--ink-faint); font-size: 11.5px; }
+.log li.alarm { border-left-color: var(--bad); } .log li.alarm span { color: #ffc4c4; }
+.log li.warn { border-left-color: var(--warn); }
+.log li.radio { border-left-color: var(--radio); } .log li.radio span { color: #dccfff; }
+.log li.info span { color: var(--ink-dim); }
+.filters { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.chip { background: none; border: 1px solid var(--line); border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: pointer; color: var(--ink-dim); }
+.chip.on { border-color: var(--ip); color: var(--ink); }
+#graph { width: 100%; height: 560px; display: block; background: var(--wall); border: 1px solid var(--line); border-radius: 4px; }
+select { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; font-size: 13px; }
+.legend { display: grid; grid-template-columns: 22px 1fr; gap: 5px 8px; font-size: 12.5px; align-items: center; color: var(--ink-dim); }
+.legend i { display: block; height: 4px; border-radius: 2px; }
+.legend i.dot { width: 9px; height: 9px; border-radius: 50%; }
+.help p { margin: 6px 0; color: var(--ink-dim); font-size: 13px; } .help b { color: var(--ink); }
+kbd { font-family: var(--f-mono); font-size: 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+
+/* overlays */
+.ov { position: fixed; inset: 0; background: rgba(2,4,8,.82); display: grid; place-items: center; z-index: 20; overflow: auto;
+  padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.ov[hidden] { display: none !important; }
+.sheet { width: min(760px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 26px 28px; }
+.sheet .eyebrow { font-family: var(--f-display); letter-spacing: .2em; text-transform: uppercase; color: var(--ip); font-size: 13px; }
+.sheet h1 { font-family: var(--f-display); font-size: 40px; line-height: 1; margin: 6px 0 10px; letter-spacing: .01em; text-wrap: balance; }
+.sheet p { color: var(--ink-dim); max-width: 64ch; margin: 8px 0; }
+.deskpick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.deskpick label { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; cursor: pointer; }
+.deskpick label:has(input:checked) { border-color: var(--warn); }
+.deskpick input { grid-row: span 2; margin-top: 4px; accent-color: var(--warn); }
+.deskpick b { font-family: var(--f-display); font-size: 17px; letter-spacing: .03em; }
+.deskpick small { color: var(--ink-faint); font-size: 12px; }
+.scnpick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 4px; }
+.scnpick label { display: grid; gap: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; cursor: pointer; }
+.scnpick label:has(input:checked) { border-color: var(--ip); background: #0f2830; }
+.scnpick input { position: absolute; opacity: 0; pointer-events: none; }
+.scnpick label:has(input:focus-visible) { outline: 2px solid var(--ip); outline-offset: 1px; }
+.scnpick em { font-style: normal; font-family: var(--f-display); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ip); }
+.scnpick b { font-family: var(--f-display); font-size: 19px; letter-spacing: .02em; }
+.scnpick time { font-family: var(--f-mono); font-size: 13px; color: var(--warn); }
+.scnpick small { color: var(--ink-faint); font-size: 12px; line-height: 1.35; }
+.sheet .sec { margin-top: 16px; }
+.opts { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; color: var(--ink-dim); margin-bottom: 18px; }
+.big { font-size: 15px; padding: 9px 22px; }
+.report { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.report div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; }
+.report small { display: block; font-family: var(--f-display); letter-spacing: .12em; text-transform: uppercase; font-size: 11px; color: var(--ink-faint); }
+.report b { font-family: var(--f-mono); font-size: 22px; }
+
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .app { height: auto; min-height: 100%; }
+  .main { grid-template-columns: 1fr; }
+  .wall { height: 62vh; }
+  .side { border-left: 0; border-top: 1px solid var(--line); min-height: 60vh; }
+  .kpis { margin-left: 0; }
+  .hint { display: none; }
+  #mini { width: 150px; height: 50px; }
+  .deskpick, .report, .scnpick { grid-template-columns: 1fr; }
+  .sheet { padding: 18px; } .sheet h1 { font-size: 30px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><b>CCO Contumil</b><span>Infraestruturas de Portugal · Comando de Circulação</span></div>
+    <div class="clock" id="clock">05:30:00</div>
+    <div class="seg" id="speeds" role="group" aria-label="Velocidade da simulação"></div>
+    <div class="kpis" id="kpis"></div>
+  </header>
+  <div class="main">
+    <section class="wall" aria-label="Quadro sinóptico">
+      <canvas id="cv"></canvas>
+      <div class="desks" id="desks"></div>
+      <div class="toast" id="toast"></div>
+      <div class="ctx" id="ctx"></div>
+      <div class="hint" id="hint"></div>
+      <canvas id="mini" aria-label="Vista geral"></canvas>
+    </section>
+    <aside class="side">
+      <nav class="tabs" id="tabs">
+        <button data-tab="trains" class="on">Comboios</button>
+        <button data-tab="train">Horário</button>
+        <button data-tab="graph">Gráfico</button>
+        <button data-tab="log">Registo <em id="alarms" hidden>0</em></button>
+        <button data-tab="help">Guia</button>
+      </nav>
+      <div class="pane" id="p-trains"></div>
+      <div class="pane" id="p-train" hidden></div>
+      <div class="pane" id="p-graph" hidden>
+        <div class="filters">
+          <select id="gcor" aria-label="Linha">
+            <option value="MINHO">Linha do Minho · Porto–Valença</option>
+            <option value="BRAGA">Ramal de Braga · Porto–Braga</option>
+            <option value="GUIM">Linha de Guimarães · Porto–Guimarães</option>
+            <option value="DOURO">Linha do Douro · Porto–Régua</option>
+          </select>
+        </div>
+        <canvas id="graph"></canvas>
+        <p class="sec">Traço fino = horário previsto · traço grosso = marcha real</p>
+      </div>
+      <div class="pane" id="p-log" hidden>
+        <div class="filters" id="logf"></div>
+        <ul class="log" id="log"></ul>
+      </div>
+      <div class="pane help" id="p-help" hidden></div>
+    </aside>
+  </div>
+</div>
+
+<div class="ov" id="start">
+  <div class="sheet">
+    <div class="eyebrow" id="startEyebrow">Escolha o turno</div>
+    <h1>Centro de Comando Operacional de Contumil</h1>
+    <p>É o operador de circulação das linhas do Minho, Douro, Guimarães, do Ramal de Braga e da linha de mercadorias de Leixões. Estabeleça itinerários de sinal a sinal, planeie os cruzamentos em via única, dê marcha aos especiais e ao Socorro, e mantenha o horário.</p>
+    <p class="sec">Turno</p>
+    <div class="scnpick" id="scnpick"></div>
+    <p class="sec">Mesas em comando manual</p>
+    <p>As restantes ficam em ARS, que estabelece itinerários pela ordem do horário. Pode alternar qualquer mesa durante o turno.</p>
+    <div class="deskpick" id="deskpick"></div>
+    <div class="opts">
+      <label><input type="checkbox" id="optFaults" checked> Avarias aleatórias (circuitos de via, agulhas e material circulante)</label>
+    </div>
+    <button class="btn pri big" id="go">Assumir o turno</button>
+  </div>
+</div>
+<div class="ov" id="end" hidden>
+  <div class="sheet">
+    <div class="eyebrow" id="endEyebrow">Fim de turno</div>
+    <h1 id="endTitle">Relatório de turno</h1>
+    <div class="report" id="report"></div>
+    <p id="endNote"></p>
+    <div class="btns"><button class="btn pri" id="again">Novo turno</button><button class="btn" id="keep">Continuar a observar</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ─────────────────────────────────────────────────────────────────────────────
+// NETWORK MODEL
+// nodes   : track joints, points (3 legs), buffers, boundaries
+// edges   : track circuits (CDV). len in metres, v = line speed km/h
+// signals : at the end of an edge, facing trains travelling along it toward node n
+// Left-hand running (Portugal): on double track the upper track carries trains
+// travelling away from Porto (rightwards on the diagram).
+// ─────────────────────────────────────────────────────────────────────────────
+const DX = 12, CX = 14;
+const NET = { nodes: [], edges: [], signals: [], st: {}, halts: [], loc: {}, bounds: {}, points: [] };
+
+function mkNode(x, y, km, o) {
+  const n = Object.assign({ id: NET.nodes.length, x, y, km, edges: [], type: 'joint' }, o || {});
+  NET.nodes.push(n); return n;
+}
+function mkEdge(a, b, len, o) {
+  const e = Object.assign({ id: NET.edges.length, a: a.id, b: b.id, len: Math.max(25, Math.round(len)), v: 80,
+    pts: null, occ: new Set(), lock: null, st: null, plat: null, halts: [], sigA: -1, sigB: -1, fail: 0 }, o || {});
+  a.edges.push(e.id); b.edges.push(e.id); NET.edges.push(e); return e;
+}
+function mkSig(e, n, kind, name, desk) {
+  const s = { id: NET.signals.length, e: e.id, n: n.id, kind, name, desk, aspect: 0, route: null, fleet: false };
+  NET.signals.push(s);
+  if (n.id === e.a) e.sigA = s.id; else e.sigB = s.id;
+  return s;
+}
+
+// ── stations ────────────────────────────────────────────────────────────────
+function fan(st, s, xEdge, list) {
+  const end = s < 0 ? 'W' : 'E';
+  const leadY = st.tracks[list[0]].y;
+  let prev = st.tracks[list[0]][end];
+  for (let k = 1; k < list.length; k++) {
+    const p = mkNode(xEdge + s * k * DX, leadY, st.km);
+    mkEdge(p, prev, 40, { v: st.vt, st: st.id });
+    mkEdge(p, st.tracks[list[k]][end], 60, { v: 40, st: st.id, div: true });
+    prev = p;
+  }
+  return { node: prev, w: list.length - 1 };
+}
+function buildConn(st, s, xEdge, c) {
+  if (c.t === 'S') {
+    const F = fan(st, s, xEdge, c.tr);
+    const P = mkNode(xEdge + s * (F.w + 2) * DX, F.node.y, st.km);
+    mkEdge(F.node, P, 50, { v: st.vt, st: st.id });
+    return { t: 'S', node: P };
+  }
+  const T = fan(st, s, xEdge, c.top), B = fan(st, s, xEdge, c.bot);
+  const xc = xEdge + s * (Math.max(T.w, B.w) + 1.5) * DX;
+  const yT = T.node.y, yB = B.node.y, km = st.km, o = { v: st.vt, st: st.id };
+  const c2T = mkNode(xc, yT, km), c2B = mkNode(xc + s * CX, yB, km);
+  const c1B = mkNode(xc + s * 2 * CX, yB, km), c1T = mkNode(xc + s * 3 * CX, yT, km);
+  const PT = mkNode(xc + s * 4.4 * CX, yT, km), PB = mkNode(xc + s * 4.4 * CX, yB, km);
+  mkEdge(T.node, c2T, 40, o); mkEdge(c2T, c1T, 60, o); mkEdge(c1T, PT, 40, o);
+  mkEdge(B.node, c2B, 40, o); mkEdge(c2B, c1B, 40, o); mkEdge(c1B, PB, 40, o);
+  mkEdge(c2T, c2B, 60, { v: 60, st: st.id, div: true });
+  mkEdge(c1T, c1B, 60, { v: 60, st: st.id, div: true });
+  return { t: 'D', top: PT, bot: PB };
+}
+function station(sp) {
+  const st = Object.assign({ tracks: [], ports: { W: [], E: [] }, vt: 100, w: 150 }, sp);
+  NET.st[st.id] = st;
+  NET.loc[st.id] = { id: st.id, name: st.name, km: st.km, type: 'st' };
+  const xw = st.x - st.w / 2, xe = st.x + st.w / 2;
+  st.x1 = xw; st.x2 = xe;
+  st.tr.forEach((t, i) => {
+    const y = st.y + t.dy;
+    const W = mkNode(xw, y, st.km), E = mkNode(xe, y, st.km);
+    const e = mkEdge(W, E, t.len, { v: t.v || (t.main ? st.vt : 60), st: st.id, plat: t.p || null, tname: t.n || String(i + 1), stTrack: true,
+      main: !!t.main, term: !!t.term, depot: !!t.depot });
+    st.tracks.push({ W, E, e, y, i, len: t.len, p: t.p || null, n: t.n || String(i + 1) });
+  });
+  st.half = Math.max(...st.tr.map(t => t.len)) / 2 + 150;
+  st.term = st.tr.some(t => t.term); st.pax = st.tr.some(t => t.p);
+  st.oneRoad = st.tr.filter(t => !t.term && !t.depot).length === 1; // cannot be a crossing point
+  st.y1 = Math.min(...st.tracks.map(t => t.y)); st.y2 = Math.max(...st.tracks.map(t => t.y));
+  for (const side of ['W', 'E']) {
+    const s = side === 'W' ? -1 : 1, xEdge = side === 'W' ? xw : xe;
+    for (const c of (st[side] || [])) st.ports[side].push(buildConn(st, s, xEdge, c));
+    st.tracks.forEach(t => {
+      const end = t[side];
+      if (end.edges.length === 1) end.type = 'buffer';
+      else mkSig(t.e, end, 'main', `${st.short} S${t.n}${side === 'E' ? '▸' : '◂'}`, st.desk);
+    });
+  }
+  return st;
+}
+
+// ── plain line ──────────────────────────────────────────────────────────────
+function polyAt(path, cum, d) {
+  for (let i = 1; i < path.length; i++) {
+    if (d <= cum[i] || i === path.length - 1) {
+      const f = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+      return [path[i - 1][0] + (path[i][0] - path[i - 1][0]) * f, path[i - 1][1] + (path[i][1] - path[i - 1][1]) * f];
+    }
+  }
+}
+function track(nA, nB, via, kmA, kmB, L, cuts, o) {
+  const path = [[nA.x, nA.y], ...via, [nB.x, nB.y]];
+  const cum = [0];
+  for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  const tot = cum[cum.length - 1];
+  const fr = [0, ...cuts, 1];
+  const nodes = fr.map((f, i) => {
+    if (i === 0) return nA; if (i === fr.length - 1) return nB;
+    const p = polyAt(path, cum, f * tot); return mkNode(p[0], p[1], kmA + (kmB - kmA) * f);
+  });
+  const edges = [];
+  for (let i = 0; i < fr.length - 1; i++) {
+    const pts = [[nodes[i].x, nodes[i].y]];
+    for (let k = 1; k < path.length - 1; k++) { const f = cum[k] / tot; if (f > fr[i] && f < fr[i + 1]) pts.push(path[k]); }
+    pts.push([nodes[i + 1].x, nodes[i + 1].y]);
+    edges.push(mkEdge(nodes[i], nodes[i + 1], L * (fr[i + 1] - fr[i]), { v: o.v, pts: pts.length > 2 ? pts : null, line: o.line }));
+  }
+  return { nodes, edges, fr, path, cum, tot };
+}
+function addHalts(trks, halts, kmA, kmB, L) {
+  for (const h of halts || []) {
+    const f = (h.km - kmA) / (kmB - kmA);
+    const rec = { id: 'h_' + h.n.replace(/\W/g, ''), name: h.n, km: h.km, marks: [], x: 0, y: 0 };
+    trks.forEach((T, ti) => {
+      for (let i = 0; i < T.fr.length - 1; i++) if (f >= T.fr[i] && f < T.fr[i + 1]) {
+        // keep the stop marker clear of circuit joints so a stopping train never straddles it
+        const e = T.edges[i]; rec.marks.push({ e: e.id, off: Math.min(Math.max((f - T.fr[i]) * L, 90), e.len - 90) }); e.halts.push(rec.id);
+        if (ti === 0) { const p = polyAt(T.path, T.cum, f * T.tot); rec.x = p[0]; rec.y = p[1]; }
+      }
+    });
+    NET.halts.push(rec); NET.loc[rec.id] = { id: rec.id, name: h.n, km: h.km, type: 'halt', rec };
+  }
+}
+let autoN = 100;
+function lineLen(A, B, o) { return o.len || Math.max(500, Math.abs(B.km - A.km) * 1000 - A.half - B.half); }
+// double line: A (west/E port index ia) → B (W port index ib)
+function dline(A, ia, B, ib, o) {
+  const pA = A.ports.E[ia], pB = B.ports.W[ib], L = lineLen(A, B, o);
+  const nb = Math.max(1, Math.round(L / (o.blk || 2800)));
+  const cuts = []; for (let i = 1; i < nb; i++) cuts.push(i / nb);
+  // keep bend points strictly between the two throats, so the drawn line never doubles back on itself
+  const xa = pA.top.x + 25, xb = pB.top.x - 25;
+  const via = (o.via || []).map(p => [Math.min(xb, Math.max(xa, p[0])), p[1]]);
+  const T = track(pA.top, pB.top, via.map(p => [p[0], p[1] - 8]), A.km, B.km, L, cuts, o);
+  const Bt = track(pA.bot, pB.bot, via.map(p => [p[0], p[1] + 8]), A.km, B.km, L, cuts, o);
+  // double track is signalled one way only (no wrong-line working)
+  T.edges.forEach(e => e.oneway = 1); Bt.edges.forEach(e => e.oneway = -1);
+  for (let i = 1; i < nb; i++) {
+    mkSig(T.edges[i - 1], T.nodes[i], 'auto', 'B' + (autoN++), A.desk);
+    mkSig(Bt.edges[i], Bt.nodes[i], 'auto', 'B' + (autoN++), A.desk);
+  }
+  mkSig(T.edges[T.edges.length - 1], pB.top, 'main', `${B.short} E1▸`, B.desk);
+  mkSig(Bt.edges[0], pA.bot, 'main', `${A.short} E2◂`, A.desk);
+  addHalts([T, Bt], o.halts, A.km, B.km, L);
+}
+// single line between two S ports
+function sline(A, pa, B, pb, o) {
+  const nA = pa.node, nB = pb.node, L = lineLen(A, B, o);
+  const n = Math.max(1, Math.ceil(L / 3200)), cuts = [];
+  for (let i = 1; i < n; i++) cuts.push(i / n);
+  const T = track(nA, nB, o.via || [], o.kmA ?? A.km, o.kmB ?? B.km, L, cuts, o);
+  mkSig(T.edges[T.edges.length - 1], nB, 'main', `${B.short} E${o.hb || 1}${nB.x > T.nodes[T.nodes.length - 2].x ? '▸' : '◂'}`, B.desk);
+  mkSig(T.edges[0], nA, 'main', `${A.short} E${o.ha || 2}${nA.x > T.nodes[1].x ? '▸' : '◂'}`, A.desk);
+  addHalts([T], o.halts, o.kmA ?? A.km, o.kmB ?? B.km, L);
+}
+// boundary (fronteira da área de comando)
+function boundary(name, label, port, kind, side, via, far, A) {
+  const mk = (p, dy) => { const n = mkNode(far[0], far[1] + dy, A.km + (side === 'E' ? 3 : -3), { type: 'boundary', bname: name }); return n; };
+  const b = { name, label, x: far[0], y: far[1] };
+  if (kind === 'S') {
+    const fn = mk(port.node, 0);
+    const T = track(port.node, fn, via, A.km, A.km + (side === 'E' ? 3 : -3), 3000, [], { v: 100 });
+    mkSig(T.edges[0], port.node, 'main', `${A.short} E${side === 'E' ? '2◂' : '1▸'}`, A.desk);
+    b.inE = T.edges[0].id; b.inFar = fn.id; b.outFar = [fn.id];
+  } else {
+    // west side: arrivals on top track, departures on bottom; east side the reverse
+    const ft = mk(port.top, -8), fb = mk(port.bot, 8);
+    const T = track(ft, port.top, via.map(p => [p[0], p[1] - 8]), A.km - 3, A.km, 3000, [], { v: 100 });
+    const Bt = track(fb, port.bot, via.map(p => [p[0], p[1] + 8]), A.km - 3, A.km, 3000, [], { v: 100 });
+    T.edges[0].oneway = side === 'W' ? 1 : -1; Bt.edges[0].oneway = side === 'W' ? -1 : 1;
+    if (side === 'W') {
+      mkSig(T.edges[0], port.top, 'main', `${A.short} E3▸`, A.desk);
+      b.inE = T.edges[0].id; b.inFar = ft.id; b.outFar = [fb.id];
+    } else {
+      mkSig(Bt.edges[0], port.bot, 'main', `${A.short} E3◂`, A.desk);
+      b.inE = Bt.edges[0].id; b.inFar = fb.id; b.outFar = [ft.id];
+    }
+  }
+  NET.bounds[name] = b; NET.loc[name] = { id: name, name: label, km: A.km + (side === 'E' ? 3 : -3), type: 'bound' };
+  return b;
+}
+
+// ── geometry helpers ────────────────────────────────────────────────────────
+function dirFrom(n, e) {
+  let p;
+  if (e.pts) p = e.a === n.id ? e.pts[1] : e.pts[e.pts.length - 2];
+  else { const o = NET.nodes[e.a === n.id ? e.b : e.a]; p = [o.x, o.y]; }
+  const dx = p[0] - n.x, dy = p[1] - n.y, l = Math.hypot(dx, dy) || 1;
+  return [dx / l, dy / l];
+}
+function finalizePoints() {
+  for (const n of NET.nodes) {
+    if (n.edges.length > 3) console.error('node with >3 edges', n);
+    if (n.edges.length !== 3) continue;
+    const es = n.edges.map(id => NET.edges[id]), vs = es.map(e => dirFrom(n, e));
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+    let ci = 0, best = 9;
+    for (let i = 0; i < 3; i++) { const s = vs.reduce((acc, v, j) => j === i ? acc : acc + dot(vs[i], v), 0); if (s < best) { best = s; ci = i; } }
+    const o = [0, 1, 2].filter(i => i !== ci);
+    const ni = dot(vs[ci], vs[o[0]]) < dot(vs[ci], vs[o[1]]) ? o[0] : o[1], ri = o[0] === ni ? o[1] : o[0];
+    Object.assign(n, { type: 'point', c: es[ci].id, nrm: es[ni].id, rev: es[ri].id, pos: 'N', moving: 0, fail: 0, pname: '' });
+    NET.points.push(n);
+  }
+  // number points per station (AG = agulha)
+  const cnt = {};
+  for (const p of NET.points) {
+    const e = NET.edges[p.c]; const sid = e.st || NET.edges[p.nrm].st || '?';
+    cnt[sid] = (cnt[sid] || 0) + 1; p.st = sid; p.pname = `${NET.st[sid] ? NET.st[sid].short : ''} AG${cnt[sid]}`;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LAYOUT — Porto, Linha do Minho, Ramal de Braga, Linha de Guimarães,
+// Linha do Douro, Linha de Leixões. Schematic, km approximate.
+// Desks (mesas): 1 Porto · 2 Minho Sul/Braga/Guimarães · 3 Minho Norte · 4 Douro
+// ═════════════════════════════════════════════════════════════════════════════
+function buildNetwork() {
+  const P = (n, dy, len, p, o) => Object.assign({ n, dy, len, p }, o || {});
+  // Porto
+  const SB = station({ id: 'SB', name: 'Porto São Bento', short: 'PSB', km: 0, x: 150, y: 700, w: 150, desk: 1, vt: 40,
+    tr: [P('1', -32, 230, '1'), P('2', -16, 230, '2'), P('3', 0, 230, '3'), P('4', 16, 230, '4'), P('5', 32, 230, '5')],
+    E: [{ t: 'D', top: [1, 0], bot: [2, 3, 4] }] });
+  const CMP = station({ id: 'CMP', dirRoads: { E: ['1', '2', '4'], W: ['3', '5', '6'] }, name: 'Porto Campanhã', short: 'CPM', km: 2.6, x: 720, y: 700, w: 200, desk: 1, vt: 60,
+    tr: [P('1', -40, 300, '1'), P('2', -24, 300, '2'), P('3', -8, 300, '3'), P('4', 8, 300, '4'), P('5', 24, 300, '5'), P('6', 40, 300, '6')],
+    W: [{ t: 'D', top: [1, 0], bot: [2] }, { t: 'D', top: [3], bot: [4, 5] }],
+    E: [{ t: 'D', top: [2, 1, 0], bot: [3, 4, 5] }] });
+  // Contumil: track S is the Socorro's stabling road (depot), connected at both ends
+  const CTM = station({ id: 'CTM', dirRoads: { E: ['1', '2'], W: ['1', '3', '4'] }, name: 'Contumil', short: 'CTM', km: 4.6, x: 1140, y: 700, w: 140, desk: 1, vt: 80,
+    tr: [P('1', -24, 350, '1'), P('2', -8, 350, '2', { main: 1 }), P('3', 8, 350, '3', { main: 1 }), P('4', 24, 350, '4'), P('S', 40, 200, null, { depot: 1 })],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3, 4] }],
+    E: [{ t: 'S', tr: [0] }, { t: 'D', top: [1], bot: [2, 3, 4] }] });
+  const LXS = station({ id: 'LXS', name: 'Leixões (terminal)', short: 'LXS', km: 13, x: 860, y: 484, w: 180, desk: 1, vt: 40,
+    tr: [P('1', -16, 700), P('2', 0, 700), P('3', 16, 700)], E: [{ t: 'S', tr: [1, 0, 2] }] });
+  const SGM = station({ id: 'SGM', name: 'São Gemil', short: 'SGM', km: 7.5, x: 1255, y: 484, w: 110, desk: 1, vt: 50,
+    tr: [P('1', -8, 600), P('2', 8, 600)], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0] }, { t: 'S', tr: [1] }] });
+  const ERM = station({ id: 'ERM', dirRoads: { E: ['1', '3', 'L'], W: ['2', '4', '5', 'L'] }, name: 'Ermesinde', short: 'ERM', km: 11.0, x: 1900, y: 700, w: 180, desk: 1, vt: 80,
+    tr: [P('L', -40, 650), P('1', -24, 450, '1'), P('2', -8, 450, '2', { main: 1 }), P('3', 8, 450, '3', { main: 1 }), P('4', 24, 450, '4'), P('5', 40, 450, '5')],
+    W: [{ t: 'S', tr: [0] }, { t: 'D', top: [2, 1], bot: [3, 4, 5] }],
+    E: [{ t: 'D', top: [1, 0], bot: [2] }, { t: 'D', top: [3], bot: [4, 5] }] });
+  // Minho Sul / Braga / Guimarães — goods terminals (track T, stub from the Porto side)
+  const CIM = station({ id: 'CIM', dirMain: 1, name: 'Cimpor', short: 'CIM', km: 15.6, x: 2420, y: 420, w: 70, desk: 2, vt: 140,
+    tr: [P('T', -24, 650, null, { term: 1 }), P('1', -8, 300, null, { main: 1 }), P('2', 8, 300, null, { main: 1 })],
+    W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1], bot: [2] }] });
+  const LEA = station({ id: 'LEA', dirMain: 1, name: 'Leandro', short: 'LEA', km: 20.4, x: 2760, y: 420, w: 110, desk: 2, vt: 140,
+    tr: [P('T', -24, 650, null, { term: 1 }), P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2', { main: 1 })],
+    W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1], bot: [2] }] });
+  const TRF = station({ id: 'TRF', dirMain: 1, name: 'Trofa', short: 'TRF', km: 24.5, x: 3140, y: 420, desk: 2,
+    tr: [P('L', -24, 600), P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2', { main: 1 }), P('3', 24, 400, '3')],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
+  const LSD = station({ id: 'LSD', dirMain: 1, name: 'Lousado', short: 'LSD', km: 30.6, x: 3520, y: 420, desk: 2,
+    tr: [P('3', -24, 300, '3'), P('1', -8, 350, '1', { main: 1 }), P('2', 8, 350, '2', { main: 1 }), P('L', 24, 550)],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'S', tr: [0] }, { t: 'D', top: [1], bot: [2, 3] }] });
+  const FML = station({ id: 'FML', dirMain: 1, name: 'Famalicão', short: 'FML', km: 36.4, x: 3900, y: 420, desk: 2,
+    tr: [P('3', -24, 350, '3'), P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2', { main: 1 }), P('L', 24, 600)],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
+  const NIN = station({ id: 'NIN', dirRoads: { E: ['1', '3', '4', '5'], W: ['2', '4', '5'] }, name: 'Nine', short: 'NIN', km: 42.0, x: 4280, y: 420, w: 170, desk: 2,
+    tr: [P('3', -32, 350, '3'), P('1', -16, 400, '1', { main: 1 }), P('2', 0, 400, '2', { main: 1 }), P('4', 16, 400, '4'), P('5', 32, 600, '5')],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3, 4] }], E: [{ t: 'D', top: [1, 0], bot: [2] }, { t: 'S', tr: [3, 4] }] });
+  const TDM = station({ id: 'TDM', dirMain: 1, name: 'Tadim', short: 'TDM', km: 48.0, x: 4900, y: 170, w: 110, desk: 2, vt: 140,
+    tr: [P('T', -24, 650, null, { term: 1 }), P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2', { main: 1 })],
+    W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1], bot: [2] }] });
+  const BRG = station({ id: 'BRG', name: 'Braga', short: 'BRG', km: 57.0, x: 5480, y: 170, w: 150, desk: 2, vt: 60,
+    tr: [P('1', -24, 300, '1'), P('2', -8, 300, '2'), P('3', 8, 300, '3'), P('4', 24, 300, '4')],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
+  const STS = station({ id: 'STS', name: 'Santo Tirso', short: 'STS', km: 37.4, x: 3780, y: 300, w: 120, desk: 2, vt: 80,
+    tr: [P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const SMC = station({ id: 'SMC', name: 'São Martinho do Campo', short: 'SMC', km: 39.3, x: 4000, y: 255, w: 90, desk: 2, vt: 90,
+    tr: [P('T', -16, 600, null, { term: 1 }), P('1', 0, 300, null, { main: 1 })], W: [{ t: 'S', tr: [1, 0] }], E: [{ t: 'S', tr: [1] }] });
+  const VZL = station({ id: 'VZL', name: 'Vizela', short: 'VZL', km: 47.0, x: 4230, y: 210, w: 120, desk: 2, vt: 80,
+    tr: [P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const GMR = station({ id: 'GMR', name: 'Guimarães', short: 'GMR', km: 56.0, x: 4520, y: 120, w: 130, desk: 2, vt: 40,
+    tr: [P('1', -16, 260, '1'), P('2', 0, 260, '2'), P('3', 16, 260, '3')], W: [{ t: 'S', tr: [1, 0, 2] }] });
+  // Minho Norte (via única)
+  const TML = station({ id: 'TML', name: 'Tamel', short: 'TML', km: 49.8, x: 4700, y: 420, w: 100, desk: 3,
+    tr: [P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const BCL = station({ id: 'BCL', name: 'Barcelos', short: 'BCL', km: 54.0, x: 5000, y: 420, desk: 3,
+    tr: [P('2', -16, 380, '2'), P('1', 0, 420, '1', { main: 1 }), P('L', 16, 650)], W: [{ t: 'S', tr: [1, 0, 2] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
+  const MDS = station({ id: 'MDS', name: 'Midões', short: 'MDS', km: 58.5, x: 5300, y: 420, w: 100, desk: 3,
+    tr: [P('1', -8, 420, '1', { main: 1 }), P('2', 8, 420, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const BRR = station({ id: 'BRR', name: 'Barroselas', short: 'BRR', km: 63.5, x: 5560, y: 420, w: 130, desk: 3,
+    tr: [P('1', -8, 420, '1', { main: 1 }), P('2', 8, 420, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const DRQ = station({ id: 'DRQ', name: 'Darque', short: 'DRQ', km: 78.2, x: 5900, y: 420, w: 100, desk: 3, vt: 110,
+    tr: [P('T', -16, 650, null, { term: 1 }), P('1', 0, 400, '1', { main: 1 })], W: [{ t: 'S', tr: [1, 0] }], E: [{ t: 'S', tr: [1] }] });
+  const VCT = station({ id: 'VCT', name: 'Viana do Castelo', short: 'VCT', km: 80.5, x: 6240, y: 420, w: 170, desk: 3,
+    tr: [P('3', -24, 350, '3'), P('1', -8, 420, '1', { main: 1 }), P('2', 8, 420, '2'), P('L', 24, 700)],
+    W: [{ t: 'S', tr: [1, 0, 2, 3] }], E: [{ t: 'S', tr: [1, 0, 2, 3] }] });
+  const ANC = station({ id: 'ANC', name: 'Âncora-Praia', short: 'ANC', km: 96.0, x: 6680, y: 420, w: 120, desk: 3,
+    tr: [P('1', -8, 380, '1', { main: 1 }), P('2', 8, 380, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const CMN = station({ id: 'CMN', name: 'Caminha', short: 'CMN', km: 103.5, x: 7080, y: 420, w: 140, desk: 3,
+    tr: [P('2', -16, 450, '2'), P('1', 0, 450, '1', { main: 1 }), P('L', 16, 600)], W: [{ t: 'S', tr: [1, 0, 2] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
+  const VNC = station({ id: 'VNC', name: 'Vila Nova de Cerveira', short: 'VNC', km: 114.0, x: 7480, y: 420, w: 130, desk: 3,
+    tr: [P('1', -8, 520, '1', { main: 1 }), P('2', 8, 520, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const VLC = station({ id: 'VLC', name: 'Valença', short: 'VLC', km: 126.5, x: 7900, y: 420, w: 170, desk: 3,
+    tr: [P('3', -24, 400, '3'), P('1', -8, 500, '1', { main: 1 }), P('2', 8, 500, '2'), P('L', 24, 750)],
+    W: [{ t: 'S', tr: [1, 0, 2, 3] }], E: [{ t: 'S', tr: [1, 0, 2, 3] }] });
+  // Douro
+  const PRD = station({ id: 'PRD', dirMain: 1, name: 'Paredes', short: 'PRD', km: 30.9, x: 2440, y: 1000, desk: 4,
+    tr: [P('3', -24, 300, '3'), P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2', { main: 1 }), P('4', 24, 300, '4')],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
+  const CAI = station({ id: 'CAI', name: 'Caíde', short: 'CAI', km: 45.0, x: 2880, y: 1000, desk: 4,
+    tr: [P('3', -24, 260, '3'), P('1', -8, 320, '1', { main: 1 }), P('2', 8, 320, '2'), P('4', 24, 260, '4')],
+    W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'S', tr: [1, 2] }] });
+  const LVR = station({ id: 'LVR', name: 'Livração', short: 'LVR', km: 52.4, x: 3300, y: 1000, w: 120, desk: 4, vt: 80,
+    tr: [P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const MCN = station({ id: 'MCN', name: 'Marco de Canaveses', short: 'MCN', km: 58.3, x: 3700, y: 1000, w: 150, desk: 4, vt: 60,
+    tr: [P('1', -16, 300, '1'), P('2', 0, 300, '2', { main: 1 }), P('3', 16, 300, '3')], W: [{ t: 'S', tr: [1, 0, 2] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
+  const MST = station({ id: 'MST', name: 'Mosteirô', short: 'MST', km: 70.0, x: 4140, y: 1000, w: 120, desk: 4, vt: 60,
+    tr: [P('1', -8, 350, '1', { main: 1 }), P('2', 8, 350, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const ARG = station({ id: 'ARG', name: 'Aregos', short: 'ARG', km: 77.5, x: 4560, y: 1000, w: 120, desk: 4, vt: 60,
+    tr: [P('1', -8, 320, '1', { main: 1 }), P('2', 8, 320, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const ERD = station({ id: 'ERD', name: 'Ermida', short: 'ERD', km: 88.5, x: 4980, y: 1000, w: 120, desk: 4, vt: 60,
+    tr: [P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const GOD = station({ id: 'GOD', name: 'Godim', short: 'GOD', km: 99.6, x: 5300, y: 1000, w: 90, desk: 4, vt: 70,
+    tr: [P('T', -16, 600, null, { term: 1 }), P('1', 0, 300, '1', { main: 1 })], W: [{ t: 'S', tr: [1, 0] }], E: [{ t: 'S', tr: [1] }] });
+  const RGA = station({ id: 'RGA', name: 'Peso da Régua', short: 'RGA', km: 101.5, x: 5720, y: 1000, w: 170, desk: 4, vt: 50,
+    tr: [P('3', -24, 300, '3'), P('1', -8, 350, '1', { main: 1 }), P('2', 8, 350, '2'), P('4', 24, 300, '4')],
+    W: [{ t: 'S', tr: [1, 0, 2, 3] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
+
+  // ── lines ──
+  dline(SB, 0, CMP, 0, { v: 60, len: 2000 });
+  dline(CMP, 0, CTM, 0, { v: 80, len: 1300 });
+  dline(CTM, 1, ERM, 1, { v: 120, halts: [{ n: 'Rio Tinto', km: 7.2 }, { n: 'Águas Santas/Palmilheira', km: 9.3 }] });
+  sline(LXS, LXS.ports.E[0], SGM, SGM.ports.W[0], { v: 50, len: 5200 });
+  sline(SGM, SGM.ports.E[1], CTM, CTM.ports.E[0], { v: 50, len: 2300, kmA: 7.5, kmB: 4.6, via: [[1420, 492], [1420, 600], [1300, 676]] });
+  sline(SGM, SGM.ports.E[0], ERM, ERM.ports.W[0], { v: 60, len: 4200, kmA: 7.5, kmB: 11.0, via: [[1500, 476], [1690, 640]] });
+  dline(ERM, 0, CIM, 0, { v: 140, via: [[2120, 684], [2250, 420]], halts: [{ n: 'São Romão', km: 13.1 }, { n: 'Travagem', km: 14.9 }] });
+  dline(CIM, 0, LEA, 0, { v: 140, halts: [{ n: 'São Frutuoso', km: 17.2 }] });
+  dline(LEA, 0, TRF, 0, { v: 140 });
+  dline(TRF, 0, LSD, 0, { v: 140 });
+  dline(LSD, 1, FML, 0, { v: 140, halts: [{ n: 'Esmeriz', km: 33.2 }] });
+  dline(FML, 0, NIN, 0, { v: 140 });
+  dline(NIN, 0, TDM, 0, { v: 140, via: [[4485, 412], [4640, 170]], halts: [{ n: 'Arentim', km: 45.4 }] });
+  dline(TDM, 0, BRG, 0, { v: 140, halts: [{ n: 'Ruilhe', km: 50.0 }, { n: 'Mazagão', km: 52.2 }, { n: 'Aveleda', km: 54.0 }, { n: 'Ferreiros', km: 55.6 }] });
+  sline(LSD, LSD.ports.E[0], STS, STS.ports.W[0], { v: 90, halts: [{ n: 'Caniços', km: 34.6 }] });
+  sline(STS, STS.ports.E[0], SMC, SMC.ports.W[0], { v: 90 });
+  sline(SMC, SMC.ports.E[0], VZL, VZL.ports.W[0], { v: 90, halts: [{ n: 'Vila das Aves', km: 41.0 }, { n: 'Lordelo', km: 44.2 }] });
+  sline(VZL, VZL.ports.E[0], GMR, GMR.ports.W[0], { v: 90, halts: [{ n: 'Pereirinhas', km: 50.4 }, { n: 'Covas', km: 53.4 }] });
+  sline(NIN, NIN.ports.E[1], TML, TML.ports.W[0], { v: 100 });
+  sline(TML, TML.ports.E[0], BCL, BCL.ports.W[0], { v: 100 });
+  sline(BCL, BCL.ports.E[0], MDS, MDS.ports.W[0], { v: 100, halts: [{ n: 'Silva', km: 56.9 }] });
+  sline(MDS, MDS.ports.E[0], BRR, BRR.ports.W[0], { v: 100, halts: [{ n: 'Durrães', km: 59.8 }] });
+  sline(BRR, BRR.ports.E[0], DRQ, DRQ.ports.W[0], { v: 110, halts: [{ n: 'Alvarães', km: 67.0 }] });
+  sline(DRQ, DRQ.ports.E[0], VCT, VCT.ports.W[0], { v: 110 });
+  sline(VCT, VCT.ports.E[0], ANC, ANC.ports.W[0], { v: 100, halts: [{ n: 'Areosa', km: 83.4 }, { n: 'Carreço', km: 86.6 }, { n: 'Afife', km: 89.6 }] });
+  sline(ANC, ANC.ports.E[0], CMN, CMN.ports.W[0], { v: 100, halts: [{ n: 'Moledo', km: 101.0 }] });
+  sline(CMN, CMN.ports.E[0], VNC, VNC.ports.W[0], { v: 100, halts: [{ n: 'Seixas', km: 106.3 }, { n: 'Lanhelas', km: 109.7 }] });
+  sline(VNC, VNC.ports.E[0], VLC, VLC.ports.W[0], { v: 100, halts: [{ n: 'Gondarém', km: 117.6 }, { n: 'São Pedro da Torre', km: 122.3 }] });
+  dline(ERM, 1, PRD, 0, { v: 120, via: [[2060, 716], [2300, 1000]], halts: [{ n: 'Valongo', km: 15.6 }, { n: 'Suzão', km: 18.2 }, { n: 'Recarei-Sobreira', km: 23.6 }, { n: 'Cête', km: 27.0 }] });
+  dline(PRD, 0, CAI, 0, { v: 120, halts: [{ n: 'Penafiel', km: 37.4 }, { n: 'Bustelo', km: 39.9 }, { n: 'Meinedo', km: 42.1 }] });
+  sline(CAI, CAI.ports.E[0], LVR, LVR.ports.W[0], { v: 90, halts: [{ n: 'Vila Caiz', km: 48.6 }] });
+  sline(LVR, LVR.ports.E[0], MCN, MCN.ports.W[0], { v: 90 });
+  sline(MCN, MCN.ports.E[0], MST, MST.ports.W[0], { v: 80, halts: [{ n: 'Juncal', km: 61.9 }, { n: 'Pala', km: 66.2 }] });
+  sline(MST, MST.ports.E[0], ARG, ARG.ports.W[0], { v: 80 });
+  sline(ARG, ARG.ports.E[0], ERD, ERD.ports.W[0], { v: 70, halts: [{ n: 'Barqueiros', km: 83.4 }] });
+  sline(ERD, ERD.ports.E[0], GOD, GOD.ports.W[0], { v: 70, halts: [{ n: 'Rede', km: 94.0 }] });
+  sline(GOD, GOD.ports.E[0], RGA, RGA.ports.W[0], { v: 70 });
+  // boundaries
+  boundary('NORTE', '← Linha do Norte (Devesas)', CMP.ports.W[1], 'D', 'W', [[400, 860], [470, 716]], [330, 900], CMP);
+  boundary('TUI', 'Tui / Vigo (ADIF) →', VLC.ports.E[0], 'S', 'E', [], [8190, 420], VLC);
+  boundary('POC', 'Pinhão / Pocinho →', RGA.ports.E[0], 'S', 'E', [], [6000, 1000], RGA);
+  finalizePoints();
+}
+
+</script>
+<script>
+'use strict';
+// ─────────────────────────────────────────────────────────────────────────────
+// ENGINE — interlocking (encravamento), routes (itinerários), automatic block,
+// train physics, station work, faults, ARS (automatic route setting per desk)
+// ─────────────────────────────────────────────────────────────────────────────
+const E = id => NET.edges[id], N = id => NET.nodes[id], S = id => NET.signals[id];
+const endNode = (e, d) => d > 0 ? e.b : e.a;
+const sigAtEnd = (e, d) => d > 0 ? e.sigB : e.sigA;
+let ROUTES = [], LOCE = {};
+
+const SIM = {
+  t: 5.5 * 3600, tEnd: 10 * 3600, speed: 4, paused: true, trains: [], active: new Set(), svc: [], svcById: {},
+  log: [], logSeq: 0, desks: { 1: { name: 'Porto', auto: true }, 2: { name: 'Minho Sul · Braga · Guimarães', auto: true }, 3: { name: 'Minho Norte', auto: true }, 4: { name: 'Douro', auto: true } },
+  faults: true, nextFault: 6.2 * 3600, stats: { spad: 0, wrong: 0, missed: 0, runthrough: 0, done: 0, punctual: 0, delaySum: 0, incidents: 0 },
+  over: false, tid: 1,
+};
+
+function hhmm(t, sec) {
+  t = Math.round(t); const h = Math.floor(t / 3600) % 24, m = Math.floor(t / 60) % 60, s = t % 60;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + (sec ? ':' + String(s).padStart(2, '0') : '');
+}
+function log(sev, msg, train) {
+  SIM.log.unshift({ id: SIM.logSeq++, t: SIM.t, sev, msg, train: train || null });
+  if (SIM.log.length > 400) SIM.log.pop();
+  if (typeof onLog === 'function') onLog(SIM.log[0]);
+}
+
+// ── topology helpers ────────────────────────────────────────────────────────
+function nextState(eid, d) {
+  const e = E(eid), nid = endNode(e, d), n = N(nid);
+  let ne;
+  if (n.type === 'point') ne = eid === n.c ? (n.pos === 'N' ? n.nrm : n.rev) : n.c;
+  else if (n.edges.length === 2) ne = n.edges[0] === eid ? n.edges[1] : n.edges[0];
+  else return null;
+  return { e: ne, d: E(ne).a === nid ? 1 : -1, n: nid };
+}
+function trailOK(eid, n) {
+  if (n.type !== 'point') return true;
+  if (n.moving > 0) return false;
+  return eid === n.c || (n.pos === 'N' ? eid === n.nrm : eid === n.rev);
+}
+function succAll(eid, d) {
+  const e = E(eid), nid = endNode(e, d), n = N(nid), out = [];
+  const push = (ne, pos) => { const d = E(ne).a === nid ? 1 : -1; if (!E(ne).oneway || E(ne).oneway === d) out.push({ e: ne, d, n: nid, pos }); };
+  if (n.type === 'point') { if (eid === n.c) { push(n.nrm, 'N'); push(n.rev, 'R'); } else push(n.c, eid === n.nrm ? 'N' : 'R'); }
+  else if (n.edges.length === 2) push(n.edges[0] === eid ? n.edges[1] : n.edges[0], null);
+  return out;
+}
+
+function initEngine() {
+  buildNetwork();
+  // routes: from every controlled signal to the next signal in the same direction (or buffer/boundary)
+  for (const s of NET.signals) {
+    s.routes = [];
+    const e = E(s.e), d0 = e.b === s.n ? 1 : -1;
+    if (s.kind === 'auto') {
+      s.sect = []; let cur = { e: s.e, d: d0 };
+      for (let i = 0; i < 40; i++) {
+        const nx = nextState(cur.e, cur.d); if (!nx) break;
+        s.sect.push(nx.e); cur = nx;
+        if (sigAtEnd(E(cur.e), cur.d) >= 0) break;
+        const en = N(endNode(E(cur.e), cur.d)); if (en.type !== 'joint') break;
+      }
+      s.nxt = sigAtEnd(E(cur.e), cur.d);
+      continue;
+    }
+    const dfs = (eid, d, edges, pts, depth) => {
+      for (const nx of succAll(eid, d)) {
+        const pts2 = nx.pos ? pts.concat([{ n: nx.n, pos: nx.pos, k: edges.length }]) : pts;
+        const edges2 = edges.concat([{ e: nx.e, d: nx.d }]);
+        const sg = sigAtEnd(E(nx.e), nx.d), en = N(endNode(E(nx.e), nx.d));
+        if (sg >= 0 || en.type === 'buffer' || en.type === 'boundary' || depth > 30) {
+          const r = { id: ROUTES.length, entry: s.id, exit: sg, endNode: en.id, edges: edges2, pts: pts2,
+            div: edges2.filter(x => E(x.e).div).length };
+          r.last = edges2[edges2.length - 1];
+          ROUTES.push(r); s.routes.push(r.id);
+        } else dfs(nx.e, nx.d, edges2, pts2, depth + 1);
+      }
+    };
+    dfs(s.e, d0, [], [], 0);
+  }
+  // home signals → which station they lead into
+  for (const s of NET.signals) {
+    if (s.kind !== 'main') continue;
+    const st0 = E(s.e).st;
+    if (!st0 && s.routes.length) { const r = ROUTES[s.routes[0]]; s.homeOf = E(r.edges[0].e).st; }
+  }
+  // location → edges
+  for (const id in NET.loc) LOCE[id] = new Set();
+  for (const e of NET.edges) if (e.st) LOCE[e.st].add(e.id);
+  for (const h of NET.halts) for (const m of h.marks) LOCE[h.id].add(m.e);
+  for (const k in NET.bounds) {
+    const b = NET.bounds[k];
+    for (const nid of b.outFar) for (const eid of N(nid).edges) LOCE[k].add(eid);
+  }
+}
+
+// reachability without reversal (ignores point positions) — used to detect wrong routing
+const reachCache = new Map();
+function reach(eid, d, loc) {
+  const key = eid * 2 + (d > 0 ? 1 : 0) + ':' + loc;
+  if (reachCache.has(key)) return reachCache.get(key);
+  const set = LOCE[loc]; let found = false;
+  if (set) {
+    const seen = new Set(), q = [[eid, d]];
+    while (q.length && !found) {
+      const [ce, cd] = q.shift(); const k = ce * 2 + (cd > 0 ? 1 : 0);
+      if (seen.has(k) || seen.size > 4000) continue; seen.add(k);
+      if (set.has(ce)) { found = true; break; }
+      for (const nx of succAll(ce, cd)) q.push([nx.e, nx.d]);
+    }
+  }
+  reachCache.set(key, found); return found;
+}
+function targetLoc(t) {
+  if (!t.plan) return null;
+  const i = t.state === 'dwell' ? t.pi + 1 : t.pi;
+  return t.plan[i] ? t.plan[i].loc : null;
+}
+function routeOK(t, r) {
+  if (!t.plan) return true;
+  const i = t.state === 'dwell' ? t.pi + 1 : t.pi, loc = t.plan[i] && t.plan[i].loc; if (!loc) return true;
+  if (!r.edges.some(x => LOCE[loc].has(x.e))) return reach(r.last.e, r.last.d, loc);
+  // the route takes the train into its next location: it must also be able to continue from there
+  const after = t.plan[i + 1];
+  if (after && E(r.last.e).st === loc) return reach(r.last.e, t.plan[i].rev ? -r.last.d : r.last.d, after.loc);
+  return true;
+}
+// a long train that fits no siding at Y may still be sent if a through route across Y and onward
+// to a station that can hold it is available now: returns [route through Y, route beyond Y]
+function throughChain(t, homeSig, depth) {
+  depth = depth || 1;
+  const rv = t.plan.find((p, i) => i >= t.pi && p.rev), dest = (rv || t.plan[t.plan.length - 1]).loc;
+  const r2s = S(homeSig).routes.map(id => ROUTES[id]).filter(r => !canSet(r) && r.exit >= 0 && reach(r.last.e, r.last.d, dest)).sort((a, b) => a.div - b.div);
+  for (const r2 of r2s) for (const id3 of S(r2.exit).routes) {
+    const r3 = ROUTES[id3];
+    if (canSet(r3) || !(r3.edges.some(x => LOCE[dest].has(x.e)) || reach(r3.last.e, r3.last.d, dest))) continue;
+    const Z = r3.exit >= 0 ? S(r3.exit).homeOf : null;
+    if (!Z || freeFor(t, S(r3.exit), Z) - inboundTo(Z) >= 1) return [r2, r3];
+    const stopsAtZ = t.plan.some((p, i) => i >= t.pi && p.loc === Z && p.stop);
+    if (depth < 4 && !stopsAtZ && freeFrom(S(r3.exit), 0) - inboundTo(Z) > 0) { const rest = throughChain(t, r3.exit, depth + 1); if (rest) return [r2, r3, ...rest]; }
+  }
+  return null;
+}
+
+// ── interlocking ────────────────────────────────────────────────────────────
+function pointOcc(n) { return E(n.c).occ.size || E(n.nrm).occ.size || E(n.rev).occ.size; }
+function canSet(r) {
+  const s = S(r.entry);
+  if (s.route) return 'O sinal já tem itinerário estabelecido';
+  for (const x of r.edges) {
+    const e = E(x.e);
+    if (e.lock) return 'Via já reservada por outro itinerário';
+    // a failed (falsely occupied) circuit does not stop the route being locked, but the signal stays closed
+    if (e.occ.size) return 'Circuito de via ocupado';
+  }
+  for (const p of r.pts) {
+    const n = N(p.n);
+    if (n.pos !== p.pos || n.moving > 0) {
+      if (n.lock) return `${n.pname} encravada noutra posição`;
+      if (n.fail) return `${n.pname} sem controlo (avaria)`;
+      if (pointOcc(n)) return `${n.pname} ocupada`;
+    }
+  }
+  return null;
+}
+function setRoute(r, quiet) {
+  const why = canSet(r);
+  if (why) { if (!quiet) log('warn', `Itinerário ${S(r.entry).name} → ${routeExitName(r)} recusado: ${why}`); return false; }
+  const a = { r, state: 'set', ri: 0, seen: [], timer: 0 };
+  for (const x of r.edges) E(x.e).lock = a;
+  for (const p of r.pts) { const n = N(p.n); if (n.pos !== p.pos) { n.pos = p.pos; n.moving = 5; } n.lock = a; }
+  S(r.entry).route = a; SIM.active.add(a);
+  return true;
+}
+function routeExitName(r) {
+  if (r.exit >= 0) return S(r.exit).name;
+  const n = N(r.endNode); return n.type === 'boundary' ? NET.bounds[n.bname].label : 'para-choques';
+}
+function releaseRoute(a) {
+  for (const x of a.r.edges) if (E(x.e).lock === a) E(x.e).lock = null;
+  for (const p of a.r.pts) if (N(p.n).lock === a) N(p.n).lock = null;
+  const s = a.r.entry >= 0 ? S(a.r.entry) : null; if (s && s.route === a) s.route = null;
+  SIM.active.delete(a);
+}
+function cancelRoute(s) {
+  const a = s.route; if (!a) return;
+  if (a.state !== 'set') { log('warn', `${s.name}: itinerário já percorrido — liberta-se automaticamente`); return; }
+  const near = SIM.trains.find(t => t.nextSig === s.id && t.v > 0.5 && t.nextSigDist < brakeDist(t) + 400);
+  s.fleet = false;
+  if (near && s.aspect > 0) {
+    a.state = 'cancel'; a.timer = 90;
+    log('warn', `${s.name}: anulação com temporização (comboio ${near.num} em aproximação) — 90 s`);
+  } else releaseRoute(a);
+}
+function brakeDist(t) { return t.v * t.v / (2 * t.dec); }
+function movePoint(n) {
+  if (n.lock) return log('warn', `${n.pname}: encravada por itinerário`);
+  if (n.fail) return log('warn', `${n.pname}: sem controlo — aguarda equipa de manutenção`);
+  if (pointOcc(n)) return log('warn', `${n.pname}: circuito ocupado`);
+  n.pos = n.pos === 'N' ? 'R' : 'N'; n.moving = 5;
+}
+
+function updateInterlocking(dt) {
+  for (const n of NET.points) { if (n.moving > 0) n.moving -= dt; if (n.fail > 0) { n.fail -= dt; if (n.fail <= 0) { n.fail = 0; log('info', `${n.pname}: controlo restabelecido`); } } }
+  for (const e of NET.edges) if (e.fail > 0) { e.fail -= dt; if (e.fail <= 0) { e.fail = 0; log('info', `CDV ${e.name || e.id} reposto ao serviço`); } }
+  for (const a of [...SIM.active]) {
+    const ed = a.r.edges;
+    if ((a.state === 'set' || a.state === 'cancel') && E(ed[0].e).occ.size) {
+      // train has passed the signal: the signal is freed for a new route, the rest releases section by section
+      a.state = 'used';
+      const s = S(a.r.entry); if (s.route === a) s.route = null;
+      if (s.fleet) s.pendingFleet = a.r;
+    }
+    if (a.state === 'cancel') { a.timer -= dt; if (a.timer <= 0) releaseRoute(a); continue; }
+    if (a.state !== 'used') continue;
+    for (let i = a.ri; i < ed.length; i++) if (E(ed[i].e).occ.size) a.seen[i] = true;
+    while (a.ri < ed.length && a.seen[a.ri] && !E(ed[a.ri].e).occ.size) { if (E(ed[a.ri].e).lock === a) E(ed[a.ri].e).lock = null; a.ri++; }
+    for (const p of a.r.pts) if (p.k < a.ri && N(p.n).lock === a) N(p.n).lock = null;
+    if (a.ri >= ed.length) releaseRoute(a);
+  }
+  // fleeting (itinerário permanente)
+  for (const s of NET.signals) if (s.pendingFleet) { if (!canSet(s.pendingFleet)) { setRoute(s.pendingFleet, true); s.pendingFleet = null; } }
+  // signal aspects: 0 stop · 1 caution (amarelo) · 2 clear (verde)
+  for (const s of NET.signals) {
+    if (s.kind === 'auto') s.clear = s.sect.every(id => !E(id).occ.size && !E(id).fail && !(E(id).lock && E(id).lock.state === 'shunt'));
+    else {
+      const a = s.route;
+      s.clear = !!a && a.state === 'set' && a.r.pts.every(p => N(p.n).moving <= 0 && N(p.n).pos === p.pos) && a.r.edges.every(x => !E(x.e).occ.size && !E(x.e).fail);
+    }
+  }
+  for (const s of NET.signals) {
+    if (!s.clear) { s.aspect = 0; continue; }
+    const nxt = s.kind === 'auto' ? s.nxt : s.route.r.exit;
+    if (nxt >= 0) s.aspect = S(nxt).clear ? 2 : 1;
+    else if (s.kind === 'auto') s.aspect = 2;
+    else s.aspect = N(s.route.r.endNode).type === 'boundary' ? 2 : 1;
+  }
+}
+
+// ── trains ──────────────────────────────────────────────────────────────────
+const CAT = {
+  URB: { label: 'Urbano', vmax: 140, acc: 0.9, dec: 0.8, len: 140, dwell: 30, cls: 'urb' },
+  REG: { label: 'Regional', vmax: 120, acc: 0.6, dec: 0.7, len: 100, dwell: 40, cls: 'reg' },
+  IR: { label: 'InterRegional', vmax: 100, acc: 0.35, dec: 0.6, len: 110, dwell: 60, cls: 'reg' },
+  IC: { label: 'Intercidades', vmax: 160, acc: 0.45, dec: 0.7, len: 230, dwell: 60, cls: 'ld' },
+  AP: { label: 'Alfa Pendular', vmax: 220, acc: 0.6, dec: 0.8, len: 160, dwell: 60, cls: 'ld' },
+  INT: { label: 'Celta (Internacional)', vmax: 120, acc: 0.5, dec: 0.7, len: 80, dwell: 60, cls: 'int' },
+  MERC: { label: 'Mercadorias', vmax: 80, acc: 0.15, dec: 0.45, len: 500, dwell: 0, cls: 'merc' },
+  // loco-hauled specials: at a reversal the locomotive runs round its train (man = seconds)
+  ESP: { label: 'Comboio especial', vmax: 100, acc: 0.3, dec: 0.55, len: 190, dwell: 90, cls: 'esp', man: 600 },
+  SOC: { label: 'Socorro · unidade diesel de Contumil', vmax: 100, acc: 0.6, dec: 0.8, len: 22, dwell: 0, cls: 'soc' },
+};
+// trains that may be received on any road (no platform needed)
+const goods = t => t.cat === 'MERC' || t.cat === 'SOC' || !!t.rescued;
+
+function trainCovered(t) { let c = t.headOff; for (let i = 0; i < t.path.length - 1; i++) c += E(t.path[i].e).len; return c; }
+function trimTail(t) {
+  let covered = trainCovered(t);
+  while (t.path.length > 1 && covered - E(t.path[0].e).len >= t.len) { covered -= E(t.path[0].e).len; const p = t.path.shift(); E(p.e).occ.delete(t.id); }
+}
+function makeTrain(svc, path, headOff) {
+  const c = CAT[svc.cat];
+  const t = { id: SIM.tid++, num: svc.num, svc, cat: svc.cat, plan: svc.plan, pi: 0, len: svc.len || c.len, vmax: c.vmax / 3.6, acc: c.acc, dec: c.dec,
+    path, headOff, v: 0, state: 'run', dwellUntil: 0, nextSig: -1, nextSigDist: 1e9, authSig: -1, onSight: false, hist: [], delay: 0, stopDist: null, fault: 0, msgSig: -1 };
+  for (const p of path) E(p.e).occ.add(t.id);
+  svc.train = t; SIM.trains.push(t); trimTail(t);
+  return t;
+}
+function removeTrain(t) {
+  for (const p of t.path) E(p.e).occ.delete(t.id);
+  SIM.trains.splice(SIM.trains.indexOf(t), 1);
+  if (t.rescued && t.rescuedBy === 'SOC') socorroReturns(t.plan[t.plan.length - 1].loc);
+  if (typeof onTrainGone === 'function') onTrainGone(t);
+}
+function reverseTrain(t) {
+  const tailOff = trainCovered(t) - t.len;
+  t.path = t.path.reverse().map(p => ({ e: p.e, d: -p.d }));
+  t.headOff = E(t.path[t.path.length - 1].e).len - Math.max(0, tailOff);
+  trimTail(t);
+}
+function finishService(t, onTimeLimit) {
+  const svc = t.svc, last = svc.plan[svc.plan.length - 1];
+  if (svc.done || svc.noStats) return; svc.done = true;
+  const d = Math.max(0, (last.aarr ?? last.apass ?? SIM.t) - last.t);
+  SIM.stats.done++; SIM.stats.delaySum += d;
+  const lim = (svc.cat === 'URB' ? 3 : 5) * 60 + 59;
+  if (d <= lim) SIM.stats.punctual++;
+  svc.finalDelay = d;
+}
+
+function stopTargetOn(t, eid, d, ds) {
+  // distance from head to the scheduled stop point if it lies on edge eid (ds = distance to edge start)
+  if (t.state !== 'run') return null;
+  const tg = t.plan[t.pi]; if (!tg || !tg.stop) return null;
+  const e = E(eid);
+  if (tg.loc.startsWith('h_')) {
+    if (!e.halts.includes(tg.loc)) return null;
+    const m = NET.loc[tg.loc].rec.marks.find(m => m.e === eid); if (!m) return null;
+    return ds + (d > 0 ? m.off : e.len - m.off);
+  }
+  if (e.st === tg.loc && e.stTrack && (e.plat || goods(t))) return ds + e.len - 15;
+  return null;
+}
+
+function lookahead(t) {
+  if (t.shunt) return shuntLook(t);
+  const b = t.dec; let vp = 1e9;
+  const lim = (dist, vt) => { const v = Math.sqrt(vt * vt + 2 * b * Math.max(0, dist)); if (v < vp) vp = v; };
+  let vcur = 1e9; for (const p of t.path) vcur = Math.min(vcur, E(p.e).v);
+  if (t.onSight) vcur = Math.min(vcur, 30);
+  vp = Math.min(vcur / 3.6, t.vmax);
+  t.nextSig = -1; t.nextSigDist = 1e9; t.stopDist = null; t.blockedBy = null;
+  const h = t.path[t.path.length - 1];
+  let cur = { e: h.e, d: h.d }, ds = -t.headOff;
+  const maxD = Math.max(1800, t.v * t.v / (2 * b) + 800);
+  const st0 = stopTargetOn(t, cur.e, cur.d, ds);
+  if (st0 !== null && st0 > -20) { t.stopDist = st0; lim(st0, 0); }
+  for (let steps = 0; steps < 80; steps++) {
+    const ed = E(cur.e), dEnd = ds + ed.len;
+    if (dEnd > maxD && t.nextSig >= 0) break;
+    const n = N(endNode(ed, cur.d)), sg = sigAtEnd(ed, cur.d);
+    if (sg >= 0) {
+      const s = S(sg);
+      if (t.nextSig < 0) { t.nextSig = sg; t.nextSigDist = dEnd; }
+      if (t.authSig !== sg) {
+        if (s.aspect === 0) { lim(dEnd - 12, 0); t.blockedBy = 'sig'; break; }
+        if (s.kind === 'main' && s.route && !routeOK(t, s.route.r)) {
+          lim(dEnd - 12, 0); t.blockedBy = 'wrong';
+          if (t.msgSig !== sg && dEnd < 400) { t.msgSig = sg; SIM.stats.wrong++; log('radio', `Maquinista ${t.num}: itinerário no ${s.name} não serve o meu destino (${NET.loc[targetLoc(t)].name}). Aguardo.`, t); }
+          break;
+        }
+      }
+    }
+    if (n.type === 'buffer') { lim(dEnd - 8, 0); break; }
+    if (n.type === 'boundary') break;
+    if (n.type === 'point' && !trailOK(cur.e, n)) { lim(dEnd - 20, 0); break; }
+    const nx = nextState(cur.e, cur.d); if (!nx) { lim(dEnd - 10, 0); break; }
+    const ne = E(nx.e);
+    if (ne.occ.size && !ne.occ.has(t.id)) { lim(dEnd - 30, 0); t.blockedBy = t.blockedBy || 'train'; break; }
+    let v = ne.v; if (t.onSight && t.authSig < 0 && sg < 0) v = Math.min(v, 30);
+    if (t.authSig === sg && sg >= 0) v = Math.min(v, 30);
+    lim(dEnd, v / 3.6);
+    cur = nx; ds = dEnd;
+    const st = stopTargetOn(t, cur.e, cur.d, ds);
+    if (st !== null && t.stopDist === null) { t.stopDist = st; lim(st, 0); }
+  }
+  return vp;
+}
+
+function onEnterEdge(t, e, prev) {
+  if (t.shunt) return;
+  let tg = t.plan[t.pi];
+  if (tg && tg.stop && prev && prev.halts.includes(tg.loc) && t.state === 'run') {
+    const m = NET.loc[tg.loc].rec.marks.find(m => m.e === prev.id), h = t.path[t.path.length - 2];
+    const atEnd = m && ((h.d > 0 && m.off > prev.len - 2) || (h.d < 0 && m.off < 2));
+    if (!atEnd) {
+      tg.missed = true; SIM.stats.missed++; t.pi++; tg = t.plan[t.pi];
+      log('alarm', `${t.num}: paragem não efetuada no apeadeiro de ${NET.loc[t.plan[t.pi - 1].loc].name}`, t);
+    }
+  }
+  if (prev && prev.st && prev.stTrack && e.st !== prev.st && tg && tg.loc === prev.st && tg.stop) {
+    tg.missed = true; SIM.stats.missed++; t.pi++;
+    log('alarm', `${t.num}: paragem não efetuada em ${NET.st[prev.st].name} (linha ${prev.tname}${prev.plat ? '' : ' sem cais'})`, t);
+  }
+  if (!tg) return;
+  if (e.stTrack && e.st === tg.loc && !tg.stop) { tg.apass = SIM.t; t.delay = SIM.t - tg.t; t.pi++; }
+  if (e.stTrack && e.st === tg.loc && tg.stop && !e.plat && !goods(t))
+    log('warn', `${t.num} encaminhado para a linha ${e.tname} de ${NET.st[e.st].name}, sem cais de passageiros`, t);
+}
+function passSignal(t, s) {
+  if (t.shunt) return; // rescue movement under written authorisation
+  if (t.authSig === s.id) { t.authSig = -1; t.onSight = true; log('info', `${t.num} ultrapassou ${s.name} com autorização — marcha à vista`, t); return; }
+  t.onSight = false;
+  if (s.aspect === 0) {
+    SIM.stats.spad++; SIM.stats.incidents++;
+    log('alarm', `SPAD — ${t.num} ultrapassou ${s.name} fechado. Comboio imobilizado (frenagem de emergência).`, t);
+    t.v = 0; t.fault = Math.max(t.fault, 300);
+  }
+}
+function advance(t, dist) {
+  t.headOff += dist;
+  for (let guard = 0; guard < 20; guard++) {
+    const h = t.path[t.path.length - 1], e = E(h.e);
+    if (t.headOff <= e.len) break;
+    const n = N(endNode(e, h.d)), sg = sigAtEnd(e, h.d);
+    if (sg >= 0) passSignal(t, S(sg));
+    if (n.type === 'boundary') {
+      const tg = t.plan[t.pi];
+      if (tg && tg.loc === n.bname) { tg.apass = SIM.t; t.delay = SIM.t - tg.t; }
+      finishService(t); log('info', `${t.num} saiu da área de comando (${NET.bounds[n.bname].label})`, t);
+      removeTrain(t); return;
+    }
+    if (n.type === 'buffer') { t.headOff = e.len; t.v = 0; log('alarm', `${t.num} embateu no para-choques!`, t); SIM.stats.incidents++; break; }
+    if (n.type === 'point' && !trailOK(h.e, n)) {
+      if (h.e !== n.c && n.moving <= 0) {
+        n.pos = h.e === n.nrm ? 'N' : 'R'; n.fail = 1800; SIM.stats.runthrough++; SIM.stats.incidents++;
+        log('alarm', `${n.pname} talonada por ${t.num} — agulha avariada (30 min)`, t);
+      } else { t.headOff = e.len; t.v = 0; break; }
+    }
+    const nx = nextState(h.e, h.d);
+    t.headOff -= e.len; t.path.push({ e: nx.e, d: nx.d }); E(nx.e).occ.add(t.id);
+    onEnterEdge(t, E(nx.e), e);
+  }
+  trimTail(t);
+}
+
+function trainStep(t, dt) {
+  if (t.state === 'base') { t.v = 0; t.nextSig = -1; return; }
+  if (t.fault > 0) { t.fault -= dt; t.v = Math.max(0, t.v - 1.2 * dt); if (t.v > 0) advance(t, t.v * dt); if (t.fault <= 0 && t.faultMsg) { log('radio', `${t.num}: avaria resolvida, retomo a marcha.`, t); t.faultMsg = null; } return; }
+  if (t.state === 'swait') { t.v = 0; t.nextSig = -1; return; }
+  if (t.state === 'dwell') {
+    t.v = 0;
+    if (t.revAt) {
+      if (t.manWait) { if (manStart(t)) t.manWait = false; }
+      else if (SIM.t >= t.revAt) {
+        reverseTrain(t); t.revAt = 0; t.msgSig = -1;
+        if (t.manEdge != null) { const e = E(t.manEdge); if (e.lock === t.manLock) e.lock = null; t.manEdge = null; }
+        log('radio', `${t.num}: inversão concluída em ${NET.loc[t.plan[t.pi].loc].name}, pronto a partir.`, t);
+      }
+    }
+    lookahead(t);
+    if (!t.revAt && SIM.t >= t.dwellUntil) { t.state = 'run'; t.pendingDep = t.plan[t.pi]; t.pi++; }
+    return;
+  }
+  if (t.state === 'term') {
+    t.v = 0; t.nextSig = -1;
+    if (t.rescued) { if (SIM.t >= t.termT + 600) { log('info', `${t.num}: ${t.cat === 'MERC' ? 'vagões resguardados' : 'passageiros transbordados'}; composição ${t.rescuedBy === 'SOC' ? 'rebocada pelo Socorro' : 'em marcha'} para Contumil`, t); removeTrain(t); } return; }
+    const nx = t.svc.next && SIM.svcById[t.svc.next];
+    const turn = t.cat === 'URB' ? 240 : t.cat === 'MERC' ? 1800 : 600;
+    if (nx && SIM.t >= t.termT + turn) {
+      const h = t.path[t.path.length - 1], n1 = nx.plan[1] && nx.plan[1].loc;
+      if (!n1 || !reach(h.e, h.d, n1)) reverseTrain(t);
+      t.svc = nx; t.num = nx.num; t.plan = nx.plan; t.pi = 0; nx.train = t; nx.spawned = true;
+      t.plan[0].aarr = SIM.t; t.state = 'dwell'; t.dwellUntil = Math.max(SIM.t + 60, t.plan[0].dep); t.msgSig = -1;
+      if (typeof onTrainRenumber === 'function') onTrainRenumber(t);
+    } else if (!nx && SIM.t >= t.termT + 180) { log('info', `${t.num} recolhido ao parque em ${NET.loc[t.plan[t.plan.length - 1].loc].name}`, t); removeTrain(t); }
+    return;
+  }
+  const vp = lookahead(t);
+  if (t.v < vp) t.v = Math.min(vp, t.v + t.acc * dt * (1 - 0.5 * t.v / t.vmax));
+  else t.v = Math.max(vp, t.v - (t.v - vp > 1.5 ? 1.6 : 1.0) * t.dec * dt);
+  if (t.v < 0.4 && vp > 0.4 && t.stopDist !== null && t.stopDist > 3) t.v = Math.min(vp, 0.6);
+  if (t.pendingDep && t.v > 0.3) { t.pendingDep.adep = SIM.t; t.delay = SIM.t - t.pendingDep.dep; t.pendingDep = null; }
+  if (t.v > 0) advance(t, t.v * dt);
+  if (!SIM.trains.includes(t)) return;
+  if (t.shunt) { if (t.stopDist !== null && t.stopDist < 8 && t.v < 0.3) couple(t); return; }
+  t.heldT = t.v < 0.1 && t.blockedBy === 'sig' ? (t.heldT || 0) + dt : 0;
+  const tg = t.plan[t.pi];
+  if (tg && tg.stop && t.stopDist !== null && t.stopDist < 6 && t.v < 0.15) {
+    t.v = 0; tg.aarr = SIM.t; t.delay = Math.max(t.delay, SIM.t - tg.t);
+    if (t.pi === t.plan.length - 1) {
+      if (t.cat === 'SOC') {
+        t.state = 'swait'; t.swaitT = SIM.t;
+        const ft = SIM.trains.find(x => x.id === t.rescue);
+        if (ft && ft.severe) log('radio', `Socorro em ${NET.loc[tg.loc].name}: pronto para entrar no cantão do ${ft.num}. Aguardo autorização de marcha.`, t);
+      } else { t.state = 'term'; t.termT = SIM.t; finishService(t); linkOnArrival(t); }
+    }
+    else {
+      t.state = 'dwell'; t.dwellUntil = Math.max(SIM.t + (tg.loc.startsWith('h_') ? CAT[t.cat].dwell : CAT[t.cat].dwell + 15), tg.dep);
+      if (tg.rev) startReversal(t, tg);
+    }
+  }
+}
+// a train that ends its service stays on its road if a later departure from here can use it
+function linkOnArrival(t) {
+  if (t.svc.next || t.rescued) return;
+  const here = t.plan[t.plan.length - 1].loc;
+  const dep = SIM.svc.filter(s => !s.spawned && !s.linkedFrom && s.origin === 'st' && s.cat === t.cat && s.plan[0].loc === here && s.plan[0].dep >= SIM.t - 900)
+    .sort((a, b) => a.plan[0].dep - b.plan[0].dep)[0];
+  if (!dep) return;
+  t.svc.next = dep.id; dep.linkedFrom = t.svc.id;
+  log('info', `${t.num} fica estacionado em ${NET.loc[here].name}, linha ${E(t.path[t.path.length - 1].e).tname}: forma o ${dep.num} das ${hhmm(dep.plan[0].dep)}`, t);
+}
+
+// ── reversals (inversão de marcha) ──────────────────────────────────────────
+function startReversal(t, tg) {
+  const man = CAT[t.cat].man;
+  t.revAt = SIM.t + (man || 120); t.dwellUntil = Math.max(t.revAt + 60, tg.dep);
+  if (!man) { log('radio', `${t.num}: inversão de marcha em ${NET.loc[tg.loc].name}, maquinista muda de cabine.`, t); return; }
+  t.manWait = !manStart(t);
+  if (t.manWait) log('warn', `${t.num} em ${NET.loc[tg.loc].name}: a locomotiva precisa de uma linha livre ao lado para contornar a composição. Liberte uma linha adjacente.`, t);
+}
+// the locomotive runs round its train: it needs the road alongside, which stays reserved meanwhile
+function manStart(t) {
+  const e0 = E(t.path[t.path.length - 1].e), st = NET.st[e0.st]; if (!st) return true;
+  const me = st.tracks.find(x => x.e === e0); if (!me) return true;
+  const nb = st.tracks.find(x => x !== me && Math.abs(x.y - me.y) === 16 && !x.e.occ.size && !x.e.lock && !x.e.fail && !x.e.term);
+  if (!nb) return false;
+  t.manLock = { state: 'man', r: { edges: [], pts: [] } }; t.manEdge = nb.e.id; nb.e.lock = t.manLock;
+  t.revAt = SIM.t + CAT[t.cat].man; t.dwellUntil = Math.max(t.revAt + 60, t.plan[t.pi].dep);
+  log('radio', `${t.num} em ${st.name}: inversão de marcha — a locomotiva contorna a composição pela linha ${nb.n} (${Math.round(CAT[t.cat].man / 60)} min).`, t);
+  return true;
+}
+
+// ── spawning ────────────────────────────────────────────────────────────────
+function trySpawn(svc) {
+  const c = CAT[svc.cat], len = svc.len || c.len;
+  if (svc.origin === 'bound') {
+    const b = NET.bounds[svc.plan[0].loc], e = E(b.inE);
+    if (e.occ.size || e.lock) return false;
+    const d = e.a === b.inFar ? 1 : -1;
+    const t = makeTrain(svc, [{ e: e.id, d }], Math.min(e.len - 50, len + 400));
+    t.v = Math.min(t.vmax, 22); t.pi = 1; svc.plan[0].apass = SIM.t; t.delay = SIM.t - svc.plan[0].t;
+    log('info', `${svc.num} (${c.label}) entrou na área: ${b.label}`, t);
+    return true;
+  }
+  const st = NET.st[svc.plan[0].loc], nextLoc = svc.plan[1].loc;
+  if (freeTracksAt(st.id, 0) - inboundTo(st.id) < 1) return false; // the last free roads are promised to trains on their way in
+  const cands = st.tracks.filter(tr => !tr.e.depot && (tr.e.plat && !tr.e.occ.size && !tr.e.lock && tr.len >= len - 5 || (svc.cat === 'MERC' && !tr.e.occ.size && !tr.e.lock && tr.len >= len)));
+  if (svc.cat === 'MERC') cands.sort((a, b) => b.e.term - a.e.term);
+  for (const tr of cands) {
+    for (const d of [1, -1]) {
+      if (!reach(tr.e.id, d, nextLoc)) continue;
+      const t = makeTrain(svc, [{ e: tr.e.id, d }], tr.len - 20);
+      t.state = 'dwell'; t.dwellUntil = svc.plan[0].dep; svc.plan[0].aarr = SIM.t;
+      log('info', `${svc.num} (${c.label}) formado em ${st.name}, linha ${tr.n}`, t);
+      return true;
+    }
+  }
+  if (!svc.spawnWarned && SIM.t > svc.plan[0].dep - 120) { svc.spawnWarned = true; log('warn', `${svc.num}: sem linha livre em ${st.name} para formar a composição`); }
+  return false;
+}
+
+// ── faults ──────────────────────────────────────────────────────────────────
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function injectFault() {
+  const k = Math.random();
+  if (k < 0.4) {
+    const near = new Set();
+    for (const t of SIM.trains) { if (t.v < 1 && t.nextSigDist > 400) continue; let cur = t.path[t.path.length - 1];
+      for (let i = 0, d = -t.headOff; i < 30 && d < brakeDist(t) + 1500; i++) { const nx = nextState(cur.e, cur.d); if (!nx) break; d += E(cur.e).len; near.add(nx.e); cur = nx; } }
+    const cands = NET.edges.filter(e => !e.st && e.len > 800 && !e.occ.size && !e.lock && !e.fail && e.sigA + e.sigB > -2 && !near.has(e.id));
+    const e = cands[Math.floor(Math.random() * cands.length)]; if (!e) return;
+    e.fail = rnd(900, 1500);
+    log('alarm', `Avaria: falsa ocupação de CDV ${locOfEdge(e)}. Autorize os comboios a ultrapassar o sinal fechado em marcha à vista.`);
+  } else if (k < 0.7) {
+    const cands = NET.points.filter(n => !n.lock && !n.fail && !pointOcc(n) && SIM.trains.length);
+    const n = cands[Math.floor(Math.random() * cands.length)]; if (!n) return;
+    n.fail = rnd(900, 1800);
+    log('alarm', `Avaria: ${n.pname} (${NET.st[n.st] ? NET.st[n.st].name : ''}) sem controlo, presa em ${n.pos === 'N' ? 'normal' : 'inversa'}. Equipa de manutenção a caminho.`);
+  } else {
+    const cands = SIM.trains.filter(t => t.state === 'run' && t.v > 5 && !t.fault && t.cat !== 'SOC' && !t.rescued && !t.shunt);
+    const t = cands[Math.floor(Math.random() * cands.length)]; if (!t) return;
+    // the first train failure of the shift, and some later ones, leave the train without traction
+    const rescueOn = SIM.trains.some(x => x.severe) || (SOC.train && SOC.train.state !== 'base') || !SOC.train;
+    if (!rescueOn && (SIM.severeN || 0) < 2 && (!SIM.severeN || Math.random() < 0.15)) {
+      SIM.severeN = (SIM.severeN || 0) + 1;
+      const why = ['avaria grave de tração', 'rodado bloqueado', 'colhida de um veículo numa passagem de nível', 'embate numa árvore caída na via'][Math.floor(Math.random() * 4)];
+      t.fault = Infinity; t.severe = true; t.failT = SIM.t; t.v = Math.min(t.v, 8); sectionOf(t);
+      log('alarm', `${t.num}: ${why} ao km ${trainKm(t).toFixed(1)}. Comboio sem marcha — pede o Socorro de Contumil.`, t);
+    } else {
+      t.fault = rnd(300, 700); t.faultMsg = true;
+      log('radio', `Maquinista ${t.num}: avaria no material, imobilizado ao km ${trainKm(t).toFixed(1)}. Previsão ${Math.round(t.fault / 60)} min.`, t);
+    }
+  }
+  SIM.stats.incidents++;
+}
+function locOfEdge(e) {
+  const a = N(e.a), b = N(e.b);
+  return `ao km ${((a.km + b.km) / 2).toFixed(1)}`;
+}
+function trainKm(t) {
+  const h = t.path[t.path.length - 1], e = E(h.e), a = N(e.a), b = N(e.b);
+  const f = Math.min(1, Math.max(0, t.headOff / e.len)); const fa = h.d > 0 ? f : 1 - f;
+  return a.km + (b.km - a.km) * fa;
+}
+
+// ── ARS (automatic route setting) for desks left on automatic ───────────────
+function freeTracksAt(stId, len) {
+  const st = NET.st[stId]; if (!st) return 9;
+  return st.tracks.filter(tr => !tr.e.occ.size && !tr.e.lock && !tr.e.fail && !tr.e.term && !tr.e.depot && tr.len >= len).length;
+}
+// free station tracks that a home signal can route into
+function freeFrom(s, len, plat) {
+  const seen = new Set();
+  for (const id of s.routes) { const e = E(ROUTES[id].last.e); if (e.stTrack && !e.term && !e.depot && !e.occ.size && !e.lock && !e.fail && e.len >= (len || 0) && (!plat || e.plat)) seen.add(e.id); }
+  return seen.size;
+}
+// free roads behind home signal s at station Y that can take train t: long enough, a platform if it stops,
+// and leading on toward its next place unless it ends or reverses at Y
+function freeFor(t, s, Y) {
+  const plat = needsPlat(t, Y), i = t.plan.findIndex((p, k) => k >= t.pi && p.loc === Y);
+  const nxt = i >= 0 && !t.plan[i].rev && t.plan[i + 1] ? t.plan[i + 1].loc : null;
+  const seen = new Set();
+  for (const id of s.routes) {
+    const r = ROUTES[id], e = E(r.last.e);
+    if (!e.stTrack || e.term || e.depot || e.occ.size || e.lock || e.fail || e.len < t.len || (plat && !e.plat)) continue;
+    if (nxt && !reach(e.id, r.last.d, nxt)) continue;
+    seen.add(e.id);
+  }
+  return seen.size;
+}
+// a passenger train that stops at Y can only be received on a platform road
+const needsPlat = (t, Y) => !goods(t) && t.plan.some((p, i) => i >= t.pi && p.loc === Y && p.stop);
+// trains already given a route toward station st (each will need a track there)
+function inboundTo(st) { let n = 0; for (const a of SIM.active) if (a.r.exit >= 0 && S(a.r.exit).homeOf === st) n++; return n; }
+function canLeave(t, exitSig, loc) {
+  if (exitSig < 0) return false;
+  return S(exitSig).routes.some(id => { const r = ROUTES[id]; return !canSet(r) && (r.edges.some(x => LOCE[loc].has(x.e)) || reach(r.last.e, r.last.d, loc)); });
+}
+function arsTick() {
+  socorroTick();
+  for (const t of SIM.trains) {
+    if (t.nextSig < 0 || t.fault > 0 || t.revAt || t.shunt) continue;
+    const s = S(t.nextSig);
+    // automatic desks also deal with failed track circuits: authorise on-sight running after 2 min
+    if (SIM.desks[s.desk] && SIM.desks[s.desk].auto && t.heldT > 120 && s.aspect === 0 && t.authSig !== s.id) {
+      const sect = s.kind === 'auto' ? s.sect : s.route ? s.route.r.edges.map(x => x.e) : [];
+      if (sect.some(id => E(id).fail) && !sect.some(id => E(id).occ.size)) { t.authSig = s.id; log('info', `Mesa ${s.desk} (ARS): ${t.num} autorizado a ultrapassar ${s.name} em marcha à vista`, t); continue; }
+    }
+    if (s.kind !== 'main' || s.route || !SIM.desks[s.desk] || !SIM.desks[s.desk].auto) continue;
+    const ready = t.state === 'dwell' ? SIM.t >= t.dwellUntil - 45 : t.state === 'run' && t.nextSigDist < 3500;
+    if (!ready) continue;
+    const loc = targetLoc(t); if (!loc) continue;
+    const tgt = t.plan[t.state === 'dwell' ? t.pi + 1 : t.pi];
+    // a train still running in to stop at this platform gets its departure route only once it is dwelling
+    if (t.state === 'run' && tgt.stop && E(s.e).st === tgt.loc) continue;
+    const cands = [];
+    for (const id of s.routes) {
+      const r = ROUTES[id]; if (!routeOK(t, r)) continue;
+      const le = E(r.last.e); let score = r.div * 4;
+      if (le.depot && t.cat !== 'SOC') continue;
+      if (le.stTrack) {
+        const fin = tgt === t.plan[t.plan.length - 1] && le.st === tgt.loc;
+        // a goods terminal road only receives the freight that ends its run there
+        if (le.term) { if (!(fin && t.cat === 'MERC')) continue; score -= 10; }
+        else if (fin && t.cat === 'MERC' && NET.st[le.st].term) continue;
+        if (le.len < t.len) { if (tgt.stop && le.st === tgt.loc) continue; score += 300; }
+        if (tgt.stop && le.st === tgt.loc && !le.plat && !goods(t)) continue;
+        if (goods(t) && le.plat) score += 20;
+        if (fin && le.main) score += 8;
+        // plain double-track station: each main road belongs to one direction (top = away from Porto)
+        const stL = NET.st[le.st];
+        if (stL.dirMain && le.main && (r.last.d > 0) !== (N(le.a).y < stL.y)) continue;
+        // node stations: trains running through keep to the roads of their direction, so the two flows never lock each other
+        const here = t.plan.find((p, i) => i >= t.pi && p.loc === le.st);
+        if (stL.dirRoads && t.cat !== 'SOC' && !fin && !(here && here.rev) && !stL.dirRoads[r.last.d > 0 ? 'E' : 'W'].includes(le.tname)) continue;
+        if (!tgt.stop && E(r.last.e).v < 80) score += 6;
+        if (t.cat === 'SOC' && fin && !socReachFrom(t, le.id, r.last.d)) continue;
+      }
+      if (t.cat !== 'SOC' && (leadsToStranded(r) || heldForRescue(t, r))) continue;
+      if (singleRoadBlocked(t, r) || reservedForInbound(t, r)) continue;
+      cands.push({ r, score });
+    }
+    cands.sort((a, b) => a.score - b.score);
+    for (const c of cands) {
+      if (canSet(c.r)) continue;
+      if (c.r.exit >= 0) {
+        const ex = S(c.r.exit), Y = ex.homeOf;
+        // via única: only send a train toward a crossing station that can still receive it,
+        // counting trains already dispatched toward it from either side
+        if (Y && Y !== E(s.e).st && !E(c.r.last.e).oneway) {
+          const inb = inboundTo(Y);
+          const endsAtY = t.plan[t.plan.length - 1].loc === Y;
+          const termFree = t.cat === 'MERC' && endsAtY && NET.st[Y] && NET.st[Y].tracks.some(x => x.e.term && !x.e.occ.size && !x.e.lock && x.len >= t.len);
+          // a one-road station on single track is no crossing: run through it to the next station that can hold the train
+          if (NET.st[Y] && NET.st[Y].oneRoad && !endsAtY) {
+            const chain = throughChain(t, c.r.exit);
+            if (!chain || chainLocks(t, chain)) continue;
+            setRoute(c.r, true); for (const r of chain) if (!setRoute(r, true)) break;
+            break;
+          }
+          if (!termFree && freeFrom(ex, 0) - inb <= 1 && wouldLock(t, Y)) continue;
+          if (!termFree && freeFor(t, ex, Y) - inb < 1) {
+            const stopsAtY = t.plan.some((p, i) => i >= t.pi && p.loc === Y && p.stop);
+            const chain = !stopsAtY && freeFrom(ex, 0) - inb > 0 ? throughChain(t, c.r.exit) : null;
+            if (!chain || chainLocks(t, chain)) continue;
+            setRoute(c.r, true); for (const r of chain) if (!setRoute(r, true)) break;
+            break;
+          }
+        }
+      }
+      // double track: never fill the last free track reachable from this approach with a train that cannot leave it
+      if (s.homeOf && E(s.e).oneway) {
+        const Y = s.homeOf, idx = t.plan.findIndex((p, i) => i >= t.pi && p.loc === Y), nxt = idx >= 0 ? t.plan[idx + 1] : null;
+        if (nxt && freeFrom(s) < 2 && !canLeave(t, c.r.exit, nxt.loc)) continue;
+      }
+      setRoute(c.r, true); break;
+    }
+  }
+}
+
+// ── Socorro: the diesel rescue unit stabled on road S at Contumil ──────────
+const SOC = { train: null, back: 0, n: 0 };
+function socorroHome() {
+  const tr = NET.st.CTM.tracks.find(x => x.e.depot);
+  if (tr.e.occ.size || tr.e.lock) return false;
+  const svc = { id: 'SOC0', num: 'SOCORRO', cat: 'SOC', plan: [{ loc: 'CTM', t: SIM.t, dep: SIM.t, stop: true }], from: 'Contumil', to: 'Contumil', noStats: true, spawned: true };
+  const t = makeTrain(svc, [{ e: tr.e.id, d: 1 }], tr.len / 2 + 11);
+  t.state = 'base'; SOC.train = t;
+  return true;
+}
+// the set is towed home; the Socorro is back on road S after the run back to Contumil
+function socorroReturns(fromLoc, alone) {
+  const r = locRoute(fromLoc, 'CTM');
+  SOC.back = SIM.t + 600 + Math.round((r ? r.dist : 20000) / ((alone ? 80 : 50) / 3.6));
+  log('info', `${alone ? 'Socorro' : 'Socorro e composição'} em marcha para Contumil — Socorro disponível ~${hhmm(SOC.back)}`);
+}
+// shortest chain of locations between two places (Dijkstra over the timetable pieces)
+let ADJ = null;
+function locRoute(a, b) {
+  if (!ADJ) {
+    ADJ = {};
+    for (const k in PIECES) {
+      const ids = PIECES[k][0].map(resolveLoc);
+      for (let i = 1; i < ids.length; i++) for (const [x, y] of [[ids[i - 1], ids[i]], [ids[i], ids[i - 1]]]) (ADJ[x] = ADJ[x] || []).push(y);
+    }
+  }
+  const dist = { [a]: 0 }, prev = {}, done = new Set();
+  for (;;) {
+    let u = null; for (const k in dist) if (!done.has(k) && (u === null || dist[k] < dist[u])) u = k;
+    if (u === null) return null; if (u === b) break; done.add(u);
+    for (const v of ADJ[u] || []) { const d = dist[u] + locDist(u, v); if (dist[v] === undefined || d < dist[v]) { dist[v] = d; prev[v] = u; } }
+  }
+  const path = [b]; while (path[0] !== a) path.unshift(prev[path[0]]);
+  return { path, dist: dist[b] };
+}
+function deskOf(t) { return t.nextSig >= 0 ? S(t.nextSig).desk : 1; }
+const deskAuto = d => SIM.desks[d] && SIM.desks[d].auto;
+
+// rescue path: no reversals, wrong-line allowed, ends on the first circuit the stranded train occupies
+function shuntPathFrom(e0, d0, self, ft, loose, lockOwn) {
+  const key = (e, d) => e * 2 + (d > 0 ? 1 : 0);
+  if (E(e0).occ.has(ft.id)) return { edges: [], pts: [], len: 0 };
+  const prev = new Map([[key(e0, d0), null]]), q = [{ e: e0, d: d0, L: 0 }];
+  while (q.length) {
+    const cur = q.shift(), ed = E(cur.e), nid = endNode(ed, cur.d), n = N(nid), outs = [];
+    if (n.type === 'point') { if (cur.e === n.c) outs.push([n.nrm, 'N'], [n.rev, 'R']); else outs.push([n.c, cur.e === n.nrm ? 'N' : 'R']); }
+    else if (n.edges.length === 2) outs.push([n.edges[0] === cur.e ? n.edges[1] : n.edges[0], null]);
+    for (const [ne, pos] of outs) {
+      const e2 = E(ne), d = e2.a === nid ? 1 : -1, k = key(ne, d), L = cur.L + e2.len;
+      if (prev.has(k) || L > 30000) continue;
+      if ([...e2.occ].some(id => id !== self && id !== ft.id)) continue;
+      if (!loose) {
+        const own = l => l && ft.ownLocks && ft.ownLocks.has(l); // the stranded train's own route is fine
+        if (e2.lock && e2.lock !== lockOwn && !e2.occ.has(ft.id) && !own(e2.lock)) continue;
+        if (pos && n.pos !== pos && ((n.lock && !own(n.lock)) || n.fail || n.moving > 0 || pointOcc(n))) continue;
+      }
+      prev.set(k, { pk: key(cur.e, cur.d), e: ne, d, pt: pos ? { n: nid, pos } : null });
+      if (e2.occ.has(ft.id)) {
+        const list = []; let kk = k;
+        while (prev.get(kk)) { const r = prev.get(kk); list.unshift(r); kk = r.pk; }
+        return { edges: list.map(r => ({ e: r.e, d: r.d })), pts: list.map((r, i) => r.pt && { n: r.pt.n, pos: r.pt.pos, k: i }).filter(Boolean), len: L };
+      }
+      q.push({ e: ne, d, L });
+    }
+  }
+  return null;
+}
+// the stations either side of a stranded train, in the order it was running
+function sectionOf(ft) {
+  // routes set ahead of it (it may have been given several sections at once) are of no use now
+  let cur = ft.path[ft.path.length - 1];
+  for (let i = 0, n = 0; i < 80 && n < 6; i++) {
+    const sg = sigAtEnd(E(cur.e), cur.d);
+    if (sg >= 0) { n++; const a = S(sg).route; if (a && a.state === 'set') releaseRoute(a); }
+    const nx = nextState(cur.e, cur.d); if (!nx) break; cur = nx;
+  }
+  // the route it was running on stays locked; a rescue run may use it
+  ft.ownLocks = new Set([...SIM.active].filter(a => a.r.edges.some(x => E(x.e).occ.has(ft.id))));
+  ft.secB = null; ft.secA = null;
+  for (let i = Math.min(ft.pi, ft.plan.length) - 1; i >= 0; i--) if (NET.loc[ft.plan[i].loc].type === 'st') { ft.secB = ft.plan[i].loc; break; }
+  for (let i = ft.pi; i < ft.plan.length; i++) if (NET.loc[ft.plan[i].loc].type === 'st') { ft.secA = ft.plan[i].loc; break; }
+  ft.secSingle = !E(ft.path[ft.path.length - 1].e).oneway;
+}
+// free roads at station Y from which the Socorro could still reach the stranded train
+function usefulFree(Y, ft) {
+  if (!Y || !NET.st[Y]) return 9;
+  return NET.st[Y].tracks.filter(tr => !tr.e.term && !tr.e.depot && !tr.e.occ.size && !tr.e.lock && !tr.e.fail &&
+    (shuntPathFrom(tr.e.id, 1, -1, ft, true) || shuntPathFrom(tr.e.id, -1, -1, ft, true))).length;
+}
+// would this train, after reaching Y, have to run through a stranded train's section?
+function heldForRescue(t, r) {
+  if (!E(S(r.entry).e).stTrack) return false; // only hold trains that are still at a station
+  for (const ft of SIM.trains) {
+    if (!ft.severe || !ft.secB || !ft.secA) continue;
+    const rest = t.plan.slice(t.state === 'dwell' ? t.pi + 1 : t.pi).map(p => p.loc);
+    const iB = rest.indexOf(ft.secB), iA = rest.indexOf(ft.secA);
+    let Y = null;
+    if (iB >= 0 && iA > iB) Y = ft.secB; else if (ft.secSingle && iA >= 0 && iB > iA) Y = ft.secA;
+    if (!Y || rest[0] !== Y) continue;
+    if ((ft.useful ? ft.useful[Y] : 9) <= 1) return true;
+  }
+  return false;
+}
+function rescueTarget(s) { return SIM.trains.find(x => x.id === s.rescue); }
+function socReachFrom(s, eid, d) {
+  const ft = rescueTarget(s); if (!ft) return true;
+  return !!(shuntPathFrom(eid, d, s.id, ft, true) || shuntPathFrom(eid, -d, s.id, ft, true));
+}
+// nearest station either side of the stranded train from which the Socorro can reach it
+function rescueStation(ft) {
+  if (ft.secB === undefined) sectionOf(ft);
+  const back = ft.secB, ahead = ft.secA;
+  const here = E(ft.path[ft.path.length - 1].e).st;
+  const cands = [...new Set([here, ahead, back].filter(Boolean))].map(id => ({ id, r: locRoute('CTM', id) })).filter(c => c.r).sort((a, b) => a.r.dist - b.r.dist);
+  const viable = c => NET.st[c.id].tracks.some(tr => !tr.e.term && (shuntPathFrom(tr.e.id, 1, -1, ft, true) || shuntPathFrom(tr.e.id, -1, -1, ft, true)));
+  return (cands.find(viable) || cands[0] || { id: 'CTM' }).id;
+}
+// the Socorro's trip on the track graph: normal running rules, plus a cab change on any station road
+function socPlan(s, X, ft) {
+  const key = (e, d) => e * 2 + (d > 0 ? 1 : 0), h = s.path[s.path.length - 1];
+  const dist = new Map(), prev = new Map(), open = [];
+  const push = (e, d, c, p) => { const k = key(e, d); if (dist.has(k) && dist.get(k) <= c) return; dist.set(k, c); prev.set(k, p); open.push([c, e, d]); };
+  push(h.e, h.d, 0, null); push(h.e, -h.d, 200, { from: null, rev: 'start' });
+  let found = null;
+  while (open.length && !found) {
+    let bi = 0; for (let i = 1; i < open.length; i++) if (open[i][0] < open[bi][0]) bi = i;
+    const [c, e, d] = open.splice(bi, 1)[0], k = key(e, d); if (c > dist.get(k)) continue;
+    const ed = E(e);
+    if (ed.stTrack && ed.st === X && !ed.term && shuntPathFrom(e, d, s.id, ft, true)) { found = k; break; }
+    for (const nx of succAll(e, d)) push(nx.e, nx.d, c + E(nx.e).len, { from: k, e: nx.e });
+    if (ed.stTrack && !ed.term && ed.st !== X) push(e, -d, c + 2500, { from: k, rev: true });
+  }
+  if (found === null) return null;
+  const chain = []; let k = found;
+  while (k !== null && k !== undefined) { const p = prev.get(k); chain.unshift({ k, p }); k = p ? p.from : null; }
+  const startRev = chain[0].p && chain[0].p.rev === 'start';
+  const plan = [{ loc: 'CTM', stop: true }];
+  for (const { k: kk, p } of chain) {
+    const e = E(kk >> 1), last = plan[plan.length - 1];
+    if (p && p.rev === true) { last.rev = true; last.stop = true; continue; }
+    if (e.stTrack && e.st !== last.loc) plan.push({ loc: e.st, stop: false });
+  }
+  plan[plan.length - 1].stop = true;
+  return { plan, startRev, dist: dist.get(found) };
+}
+function requestRescue(ft) {
+  if (!ft || !ft.severe || ft.rescueReq) return false;
+  const s = SOC.train;
+  if (!s || s.state !== 'base') { if (ft.socWarned) return false; ft.socWarned = true; log('warn', `Socorro indisponível${SOC.back ? ' — em regresso a Contumil, pronto ~' + hhmm(SOC.back) : ' — já em missão'}. ${ft.num} aguarda.`); return false; }
+  const X = rescueStation(ft), sp = socPlan(s, X, ft);
+  if (!sp) { log('warn', `Socorro: não há caminho de Contumil até ${NET.loc[X].name}.`); return false; }
+  if (sp.startRev) reverseTrain(s);
+  const plan = sp.plan;
+  let tt = SIM.t + 300, prevLoc = 'CTM';
+  for (const [i, p] of plan.entries()) {
+    if (i) tt += locDist(prevLoc, p.loc) / (75 / 3.6) + (plan[i - 1].rev ? 240 : 0); prevLoc = p.loc;
+    p.t = p.dep = Math.round(tt);
+  }
+  plan[0].t = SIM.t; plan[0].dep = SIM.t + 300;
+  SOC.n++;
+  s.svc = { id: 'SOC' + SOC.n, num: 'SOCORRO', cat: 'SOC', plan, from: 'Contumil', to: NET.loc[X].name, noStats: true, spawned: true, title: `Socorro ao ${ft.num}` };
+  s.plan = plan; s.pi = 0; s.rescue = ft.id; s.apWarn = false;
+  ft.rescueReq = true;
+  // a route already set in front of the stranded train is of no use now
+  if (ft.nextSig >= 0 && S(ft.nextSig).route && S(ft.nextSig).route.state === 'set') releaseRoute(S(ft.nextSig).route);
+  if (plan.length > 1) {
+    s.state = 'dwell'; s.dwellUntil = plan[0].dep; plan[0].aarr = SIM.t;
+  } else { s.state = 'swait'; s.swaitT = SIM.t + 300; }
+  log('radio', `CCO → Socorro de Contumil: avançar para ${NET.loc[X].name} em socorro do ${ft.num}. Saída ${hhmm(plan[0].dep)}.`, s);
+  return true;
+}
+// authorise the last stretch: points set, roads reserved, on sight at 30 km/h up to the stranded train
+const shuntingTo = ft => SIM.trains.some(x => x.shunt === ft.id);
+function tryApproach(s, manual, enRoute) {
+  const ft = rescueTarget(s); if (!ft || !ft.severe || shuntingTo(ft) || (s.state !== 'swait' && !enRoute)) return false;
+  const h0 = s.path[s.path.length - 1];
+  const fw = shuntPathFrom(h0.e, h0.d, s.id, ft, false), bw = shuntPathFrom(h0.e, -h0.d, s.id, ft, false);
+  let p = fw;
+  if (bw && (!fw || bw.len < fw.len)) { reverseTrain(s); p = shuntPathFrom(s.path[s.path.length - 1].e, s.path[s.path.length - 1].d, s.id, ft, false); }
+  if (!p) {
+    if (enRoute) return false;
+    if (manual || !s.apWarn) log('warn', `Socorro: sem percurso livre até ao ${ft.num} — há via ocupada, encravada ou agulha sem controlo pelo caminho.`, s);
+    s.apWarn = true; return false;
+  }
+  startShunt(s, ft, p);
+  log('info', `Marcha de socorro autorizada: o Socorro avança à vista (máx. 30 km/h), ${Math.round(p.len)} m até ao ${ft.num}`, s);
+  return true;
+}
+// reserve the path (points set, roads locked) and run on sight up to the stranded train
+function startShunt(s, ft, p) {
+  const a = { r: { edges: p.edges, pts: p.pts, entry: -1, exit: -1 }, state: 'shunt' };
+  for (const x of p.edges) E(x.e).lock = a;
+  for (const q of p.pts) { const n = N(q.n); if (n.pos !== q.pos) { n.pos = q.pos; n.moving = 5; } n.lock = a; }
+  SIM.active.add(a); s.shuntLock = a; s.shunt = ft.id; s.state = 'run'; s.onSight = true;
+}
+// a train standing close behind (or, on single track, facing) the stranded one can push it instead
+function findAssistant(ft) {
+  let best = null;
+  for (const x of SIM.trains) {
+    if (x === ft || x.severe || x.cat === 'SOC' || x.shunt || x.rescued || x.revAt || x.v > 0.5 || (x.state !== 'run' && x.state !== 'dwell')) continue;
+    const h = x.path[x.path.length - 1], p = shuntPathFrom(h.e, h.d, x.id, ft, false);
+    if (!p || p.len >= 5000 || (best && p.len >= best.p.len)) continue;
+    // the pair must fit a road at the first station with platforms ahead, or it would have to be towed for miles
+    const k = rescueEnd(ft, ft.len + x.len + 10), first = rescueEnd(ft, 0);
+    if (NET.loc[ft.plan[k].loc].type !== 'bound' && k !== first) continue;
+    best = { x, p };
+  }
+  return best;
+}
+function assist(ft) {
+  if (shuntingTo(ft)) return false;
+  const b = findAssistant(ft); if (!b) { log('warn', `Nenhum comboio em posição de empurrar o ${ft.num} (tem de estar parado atrás dele, com via livre até lá).`); return false; }
+  const x = b.x;
+  if (x.nextSig >= 0 && S(x.nextSig).route && S(x.nextSig).route.state === 'set') releaseRoute(S(x.nextSig).route);
+  if (x.state === 'dwell') { x.pendingDep = null; }
+  startShunt(x, ft, b.p); x.assisting = true; ft.rescueReq = true;
+  log('radio', `CCO → ${x.num}: avance à vista e acople ao ${ft.num} para o rebocar (${Math.round(b.p.len)} m). Os passageiros dos dois comboios transbordam na estação seguinte.`, x);
+  return true;
+}
+function shuntLook(t) {
+  const ft = SIM.trains.find(x => x.id === t.shunt), b = t.dec;
+  let vp = Math.min(30 / 3.6, t.vmax);
+  const lim = (dist, vt) => { const v = Math.sqrt(vt * vt + 2 * b * Math.max(0, dist)); if (v < vp) vp = v; };
+  t.nextSig = -1; t.nextSigDist = 1e9; t.stopDist = null; t.blockedBy = null; t.cpl = null;
+  if (!ft) return 0;
+  const h = t.path[t.path.length - 1];
+  let cur = { e: h.e, d: h.d }, ds = -t.headOff;
+  for (let steps = 0; steps < 60; steps++) {
+    const ed = E(cur.e);
+    if (ed.occ.has(ft.id)) {
+      const iv = occInterval(ft, ed.id), gap = cur.d > 0 ? iv[0] : ed.len - iv[1];
+      t.stopDist = ds + gap - 6; t.cpl = { e: cur.e, d: cur.d }; lim(t.stopDist, 0); break;
+    }
+    const dEnd = ds + ed.len, n = N(endNode(ed, cur.d));
+    if (n.type === 'buffer' || n.type === 'boundary') { lim(dEnd - 8, 0); break; }
+    if (n.type === 'point' && !trailOK(cur.e, n)) { lim(dEnd - 20, 0); break; }
+    const nx = nextState(cur.e, cur.d); if (!nx) { lim(dEnd - 10, 0); break; }
+    const ne = E(nx.e);
+    if (ne.occ.size && !ne.occ.has(t.id) && !ne.occ.has(ft.id)) { lim(dEnd - 30, 0); t.blockedBy = 'train'; break; }
+    cur = nx; ds = dEnd; if (ds > 3000) break;
+  }
+  return vp;
+}
+// stretch of edge eid occupied by train tr, in edge coordinates measured from node a
+function occInterval(tr, eid) {
+  const covered = trainCovered(tr), tailOff = covered - tr.len, last = tr.path.length - 1;
+  for (let i = 0; i <= last; i++) {
+    const p = tr.path[i]; if (p.e !== eid) continue;
+    const e = E(p.e), o0 = i === 0 ? Math.max(0, tailOff) : 0, o1 = i === last ? tr.headOff : e.len;
+    return p.d > 0 ? [o0, o1] : [e.len - o1, e.len - o0];
+  }
+  return [0, E(eid).len];
+}
+function releaseShunt(s) {
+  const a = s.shuntLock; if (!a) return;
+  for (const x of a.r.edges) if (E(x.e).lock === a) E(x.e).lock = null;
+  for (const p of a.r.pts) if (N(p.n).lock === a) N(p.n).lock = null;
+  SIM.active.delete(a); s.shuntLock = null;
+}
+// couple the Socorro to the stranded train; the pair continues in the stranded train's direction
+function couple(s) {
+  const ft = SIM.trains.find(x => x.id === s.shunt); if (!ft || !s.cpl) return;
+  const fEl = ft.path.find(p => p.e === s.cpl.e), rear = !!fEl && fEl.d === s.cpl.d;
+  const back = s.shuntLock;
+  releaseShunt(s); s.shunt = null;
+  for (const p of s.path) E(p.e).occ.delete(s.id);
+  if (rear) {
+    const sTail = trainCovered(s) - s.len, path = s.path.slice();
+    if (path[path.length - 1].e === ft.path[0].e) path.pop();
+    ft.path = path.concat(ft.path);
+    ft.len = Math.round(trainCovered(ft) - Math.max(0, sTail));
+  } else {
+    const fTail = trainCovered(ft) - ft.len;
+    reverseTrain(s);
+    const path = s.path.slice(); if (path.length && path[0].e === ft.path[ft.path.length - 1].e) path.shift();
+    if (path.length) { ft.path = ft.path.concat(path); ft.headOff = s.headOff; }
+    ft.len = Math.round(trainCovered(ft) - Math.max(0, fTail));
+  }
+  for (const p of ft.path) E(p.e).occ.add(ft.id);
+  // after a head-to-head coupling the pair runs back over the approach path: keep it locked until passed
+  if (!rear && back) {
+    // only up to the first signal facing the pair: from there on it gets ordinary routes
+    const all = back.r.edges.slice().reverse().map(x => ({ e: x.e, d: -x.d })), N0 = all.length, edges = [];
+    const hi = all.findIndex(x => x.e === ft.path[ft.path.length - 1].e);
+    for (const [i, x] of all.entries()) { edges.push(x); if (i >= hi && sigAtEnd(E(x.e), x.d) >= 0) break; }
+    const n = edges.length;
+    const pts = back.r.pts.map(p => ({ n: p.n, pos: p.pos, k: N0 - 1 - p.k })).filter(p => p.k < n);
+    const a = { r: { edges, pts, entry: -1, exit: -1 }, state: 'used', ri: 0, seen: [], timer: 0 };
+    for (const x of edges) if (!E(x.e).lock) E(x.e).lock = a;
+    for (const p of a.r.pts) if (!N(p.n).lock) N(p.n).lock = a;
+    SIM.active.add(a);
+  }
+  SIM.trains.splice(SIM.trains.indexOf(s), 1);
+  if (s.cat === 'SOC') SOC.train = null;
+  else { s.svc.done = true; if (s.svc.next) { const nx = SIM.svcById[s.svc.next]; if (nx) nx.linkedFrom = null; } }
+  ft.rescuedBy = s.cat === 'SOC' ? 'SOC' : s.num;
+  if (typeof onTrainGone === 'function') onTrainGone(s);
+  ft.fault = 0; ft.severe = false; ft.rescued = true; ft.vmax = Math.min(ft.vmax, 50 / 3.6); ft.acc = Math.min(ft.acc, 0.25);
+  ft.authSig = -1; ft.onSight = false; ft.faultMsg = null; ft.msgSig = -1;
+  // the service ends at the next station with platforms (and a road long enough): passengers change trains there
+  let i = rescueEnd(ft, ft.len);
+  ft.plan = ft.svc.plan = ft.plan.filter((p, k) => k < ft.pi || k === i || (k < i && NET.loc[p.loc].type !== 'halt' && (p.stop = false, true)));
+  i = ft.plan.length - 1;
+  const last = ft.plan[i]; last.stop = NET.loc[last.loc].type !== 'bound'; ft.svc.to = NET.loc[last.loc].name;
+  if (ft.svc.next) { const nx = SIM.svcById[ft.svc.next]; if (nx) nx.linkedFrom = null; ft.svc.next = null; }
+  log('radio', `${s.cat === 'SOC' ? 'Socorro' : s.num} acoplado ${rear ? 'à cauda' : 'à frente'} do ${ft.num}. Rebocado a 50 km/h até ${NET.loc[last.loc].name}, onde termina o serviço.`, ft);
+}
+// roads at Y from which a train can leave toward N2
+const RCACHE = new Map();
+function roadsToward(Y, N2) {
+  const k = Y + '>' + N2; if (RCACHE.has(k)) return RCACHE.get(k);
+  const r = NET.st[Y].tracks.filter(tr => !tr.e.term && !tr.e.depot && (reach(tr.e.id, 1, N2) || reach(tr.e.id, -1, N2))).map(tr => tr.e.id);
+  RCACHE.set(k, r); return r;
+}
+// a station whose only road onto a single-track line is taken by a train that cannot go on locks the line.
+// Don't take that road while the station at the far end is full and has a train waiting to come this way.
+function singleRoadBlocked(t, r) {
+  const le = E(r.last.e); if (!le.stTrack) return false;
+  const Y = le.st, idx = t.plan.findIndex((p, i) => i >= t.pi && p.loc === Y), nxt = idx >= 0 ? t.plan[idx + 1] : null;
+  if (!nxt || t.plan[idx].rev || roadsToward(Y, nxt.loc).length !== 1) return false;
+  const sx = sigAtEnd(le, r.last.d); if (sx < 0) return false;
+  for (const id of S(sx).routes) {
+    const r1 = ROUTES[id];
+    if (E(r1.last.e).oneway || r1.exit < 0 || !(r1.edges.some(x => LOCE[nxt.loc].has(x.e)) || reach(r1.last.e, r1.last.d, nxt.loc))) continue;
+    for (const x of r1.edges) {
+      const e = E(x.e);
+      for (const tid of e.occ) { const y = SIM.trains.find(q => q.id === tid); if (y && y !== t && nextStation(y) === Y) return true; }
+      if (e.lock && e.lock.r && e.lock.r.exit >= 0 && S(e.lock.r.exit).homeOf === Y) return true;
+    }
+    const Z = S(r1.exit).homeOf; if (!Z || !NET.st[Z] || freeFrom(S(r1.exit), 0) > 0) return false;
+    return SIM.trains.some(x => x !== t && E(x.path[x.path.length - 1].e).st === Z && nextStation(x) === Y);
+  }
+  return false;
+}
+// the station a through-chain ends at must not be left locked (see wouldLock)
+function chainLocks(t, chain) {
+  const lr = chain[chain.length - 1], Z = lr.exit >= 0 ? S(lr.exit).homeOf : null;
+  return !!Z && freeFrom(S(lr.exit), 0) - inboundTo(Z) <= 1 && wouldLock(t, Z);
+}
+function nextStation(x) {
+  if (!x.plan) return null;
+  const here = E(x.path[x.path.length - 1].e).st;
+  // one-road stations are passed, never crossed at: look beyond them
+  for (let i = x.state === 'dwell' ? x.pi + 1 : x.pi; i < x.plan.length; i++) { const l = x.plan[i].loc; if (NET.loc[l].type === 'st' && l !== here && !NET.st[l].oneRoad) return l; }
+  return null;
+}
+// taking the last road at crossing station Y locks the line if every road at the station after Y
+// is held by trains waiting to come to Y
+function wouldLock(t, Y) {
+  const i = t.plan.findIndex((p, k) => k >= t.pi && p.loc === Y); if (i < 0) return false;
+  let W = null, Wprev = Y;
+  for (let k = i + 1; k < t.plan.length; k++) { const l = t.plan[k].loc; if (NET.loc[l].type !== 'st') continue; if (NET.st[l].oneRoad) { Wprev = l; continue; } W = l; break; }
+  if (!W || !NET.st[W]) return false;
+  const Rw = roadsToward(W, Wprev); if (!Rw.length) return false;
+  return Rw.every(id => {
+    const e = E(id); let xs = [...e.occ].map(tid => SIM.trains.find(y => y.id === tid));
+    // a road reserved but not yet reached counts for the train the route was set for
+    if (!xs.length && e.lock && e.lock.r && e.lock.r.entry >= 0) xs = SIM.trains.filter(y => y.nextSig === e.lock.r.entry || y.path.some(p => e.lock.r.edges.some(q => q.e === p.e)));
+    return xs.length > 0 && xs.every(x => x && x !== t && nextStation(x) === Y);
+  });
+}
+// trains already signalled toward Y over a single line were promised a road there: don't take it from them
+function reservedForInbound(t, r) {
+  const le = E(r.last.e); if (!le.stTrack) return false;
+  const Y = le.st, idx = t.plan.findIndex((p, i) => i >= t.pi && p.loc === Y), nxt = idx >= 0 && t.plan[idx + 1] ? t.plan[idx + 1].loc : null;
+  if (!nxt) return false;
+  const R = roadsToward(Y, nxt); if (!R.includes(le.id)) return false;
+  let inb = 0;
+  for (const a of SIM.active) {
+    if (a.r.exit < 0) continue;
+    const hs = S(a.r.exit); if (hs.homeOf !== Y || E(hs.e).oneway || !hs.routes.some(id => R.includes(ROUTES[id].last.e))) continue;
+    const x = a.state === 'set' ? SIM.trains.find(y => y.nextSig === a.r.entry) : SIM.trains.find(y => a.r.edges.some(q => E(q.e).occ.has(y.id)));
+    if (!x || x === t || E(x.path[x.path.length - 1].e).st === Y) continue;
+    inb++;
+  }
+  if (!inb) return false;
+  return R.filter(id => id !== le.id && !E(id).occ.size && !E(id).lock && !E(id).fail).length < inb;
+}
+// can a train on (e0, d0) run to edge target without reversing?
+function reachEdge(e0, d0, target) {
+  const seen = new Set(), q = [[e0, d0]];
+  while (q.length) {
+    const [e, d] = q.shift(), k = e * 2 + (d > 0 ? 1 : 0); if (seen.has(k) || seen.size > 3000) continue; seen.add(k);
+    if (e === target) return true;
+    for (const nx of succAll(e, d)) q.push([nx.e, nx.d]);
+  }
+  return false;
+}
+// plan index where a rescued consist of length len ends its run
+function rescueEnd(ft, len) {
+  const fh = ft.path[ft.path.length - 1];
+  const fits = id => NET.st[id].tracks.some(tr => !tr.e.depot && tr.len >= len && (!tr.e.term || ft.cat === 'MERC') && reachEdge(fh.e, fh.d, tr.e.id));
+  const stopHere = id => NET.loc[id].type === 'bound' || (NET.loc[id].type === 'st' && (NET.st[id].pax || ft.cat === 'MERC') && fits(id));
+  let i = Math.min(ft.pi, ft.plan.length - 1); while (i < ft.plan.length - 1 && !stopHere(ft.plan[i].loc)) i++;
+  return i;
+}
+// keep other trains out of a section where a train is stranded
+function leadsToStranded(r) {
+  if (!SIM.trains.some(x => x.severe) || E(r.last.e).stTrack) return false; // a route into a station road stops there
+  let cur = r.last;
+  for (let i = 0; i < 40; i++) {
+    const e0 = E(cur.e);
+    for (const id of e0.occ) { const x = SIM.trains.find(y => y.id === id); if (x && x.severe) return true; }
+    const nx = nextState(cur.e, cur.d); if (!nx || E(nx.e).stTrack) return false;
+    cur = nx;
+  }
+  return false;
+}
+function socorroTick() {
+  if (SOC.train && SOC.train.state === 'base') for (const t of SIM.trains) if (t.severe && !t.rescueReq && SIM.t > t.failT + 150 && deskAuto(deskOf(t))) { requestRescue(t); break; }
+  for (const ft of SIM.trains) if (ft.severe) ft.useful = { [ft.secB]: usefulFree(ft.secB, ft), [ft.secA]: usefulFree(ft.secA, ft) };
+  const s = SOC.train;
+  for (const ft of SIM.trains) {
+    if (!ft.severe || SIM.t < ft.failT + 600 || SIM.t < (ft.nextAssist || 0) || !deskAuto(deskOf(ft)) || shuntingTo(ft)) continue;
+    const socOnIt = s && s.rescue === ft.id && s.state !== 'base';
+    if (socOnIt && !s.apWarn && (s.heldT || 0) < 600) continue; // the Socorro is making progress
+    ft.nextAssist = SIM.t + 60;
+    if (findAssistant(ft) && assist(ft)) log('info', `Mesa ${deskOf(ft)} (ARS): o Socorro não chega ao ${ft.num}; socorro pelo comboio seguinte`);
+  }
+  // the stranded train was taken away by another train: the Socorro goes home from where it stands
+  if (s && s.rescue && s.state !== 'base' && !s.shunt && (s.state === 'swait' || s.state === 'dwell') && !SIM.trains.some(x => x.id === s.rescue && x.severe)) {
+    const here = E(s.path[s.path.length - 1].e).st || 'CTM';
+    log('info', 'Socorro dispensado — regressa a Contumil', s);
+    removeTrain(s); SOC.train = null; socorroReturns(here, true);
+    return;
+  }
+  // held on its way for 5 min: go straight there on sight if a clear path exists from here (wrong-line if need be)
+  if (s && s.state === 'run' && !s.shunt && s.v < 0.1 && (s.heldT || 0) > 300 && SIM.t > (s.nextTry || 0)) {
+    s.nextTry = SIM.t + 30;
+    const sg = s.nextSig >= 0 ? S(s.nextSig) : null;
+    if (sg && sg.route && sg.route.state === 'set') releaseRoute(sg.route);
+    if (tryApproach(s, false, true)) log('info', 'Socorro retido: segue diretamente em marcha à vista até ao comboio imobilizado', s);
+  }
+  if (s && s.state === 'swait' && SIM.t > s.swaitT + 30 && SIM.t > (s.nextTry || 0)) {
+    const st = NET.st[s.plan[s.plan.length - 1].loc];
+    if (deskAuto(st ? st.desk : 1)) { s.nextTry = SIM.t + 20; if (tryApproach(s)) log('info', `Mesa ${st.desk} (ARS): marcha de socorro autorizada`, s); }
+  }
+}
+
+// ── main tick ───────────────────────────────────────────────────────────────
+let arsAcc = 0;
+function simStep(dt) {
+  SIM.t += dt;
+  updateInterlocking(dt);
+  for (const svc of SIM.svc) if (!svc.spawned && !svc.linkedFrom && SIM.t >= svc.spawnT) { if (trySpawn(svc)) svc.spawned = true; }
+  for (const t of [...SIM.trains]) trainStep(t, dt);
+  arsAcc += dt; if (arsAcc >= 2) { arsAcc = 0; arsTick(); }
+  if (SIM.faults && SIM.t >= SIM.nextFault) { injectFault(); SIM.nextFault = SIM.t + rnd(18, 35) * 60; }
+  if (!SOC.train && SOC.back && SIM.t >= SOC.back && socorroHome()) { SOC.back = 0; log('info', 'Socorro de regresso à base de Contumil — disponível.'); }
+  if (Math.floor(SIM.t) % 20 === 0) for (const t of SIM.trains) { const k = trainKm(t); const l = t.hist[t.hist.length - 1]; if (!l || SIM.t - l[0] >= 19) t.hist.push([SIM.t, k]); }
+  if (SIM.t >= SIM.tEnd && !SIM.over) { SIM.over = true; SIM.paused = true; if (typeof onShiftEnd === 'function') onShiftEnd(); }
+}
+
+</script>
+<script>
+'use strict';
+// ─────────────────────────────────────────────────────────────────────────────
+// TIMETABLE — three shifts (weekday morning peak, quiet Saturday morning, busy
+// Friday evening). Running times are derived from line speed, train performance
+// and stopping pattern, plus a recovery margin.
+// Train numbers follow CP conventions loosely (odd = away from Porto).
+// ─────────────────────────────────────────────────────────────────────────────
+CAT.RD = { label: 'Regional (diesel)', vmax: 100, acc: 0.35, dec: 0.6, len: 75, dwell: 40, cls: 'reg' };
+
+const PIECES = {
+  SB_CMP: [['SB', 'CMP'], 60],
+  CMP_CTM: [['CMP', 'CTM'], 80],
+  CTM_ERM: [['CTM', 'Rio Tinto', 'Águas Santas/Palmilheira', 'ERM'], 120],
+  ERM_LSD: [['ERM', 'São Romão', 'Travagem', 'CIM', 'São Frutuoso', 'LEA', 'TRF', 'LSD'], 140],
+  TRF_LSD: [['TRF', 'LSD'], 140],
+  LSD_NIN: [['LSD', 'Esmeriz', 'FML', 'NIN'], 140],
+  NIN_BRG: [['NIN', 'Arentim', 'TDM', 'Ruilhe', 'Mazagão', 'Aveleda', 'Ferreiros', 'BRG'], 140],
+  LSD_GMR: [['LSD', 'Caniços', 'STS', 'SMC', 'Vila das Aves', 'Lordelo', 'VZL', 'Pereirinhas', 'Covas', 'GMR'], 90],
+  NIN_TUI: [['NIN', 'TML', 'BCL', 'Silva', 'MDS', 'Durrães', 'BRR', 'Alvarães', 'DRQ', 'VCT', 'Areosa', 'Carreço', 'Afife', 'ANC', 'Moledo', 'CMN', 'Seixas', 'Lanhelas', 'VNC', 'Gondarém', 'São Pedro da Torre', 'VLC', 'TUI'], 100],
+  ERM_CAI: [['ERM', 'Valongo', 'Suzão', 'Recarei-Sobreira', 'Cête', 'PRD', 'Penafiel', 'Bustelo', 'Meinedo', 'CAI'], 120],
+  CAI_MCN: [['CAI', 'Vila Caiz', 'LVR', 'MCN'], 90],
+  MCN_POC: [['MCN', 'Juncal', 'Pala', 'MST', 'ARG', 'Barqueiros', 'ERD', 'Rede', 'GOD', 'RGA', 'POC'], 70],
+  NORTE_CMP: [['NORTE', 'CMP'], 100],
+  LXS_SGM: [['LXS', 'SGM'], 50],
+  SGM_CTM: [['SGM', 'CTM'], 50],
+  SGM_ERM: [['SGM', 'ERM'], 60],
+};
+const KMFIX = { 'LXS|SGM': 5.6, 'SGM|CTM': 2.6, 'SGM|ERM': 4.4 };
+
+function resolveLoc(x) {
+  if (NET.loc[x]) return x;
+  for (const k in NET.loc) if (NET.loc[k].name === x) return k;
+  throw new Error('loc ' + x);
+}
+function corridor(names) {
+  const out = [];
+  for (const nm of names) {
+    const rev = nm[0] === '-', [locs, v] = PIECES[rev ? nm.slice(1) : nm];
+    const L = rev ? [...locs].reverse() : locs;
+    for (const l of L) {
+      const id = resolveLoc(l);
+      if (out.length && out[out.length - 1].loc === id) { out[out.length - 1].v = v; continue; }
+      out.push({ loc: id, v });
+    }
+  }
+  return out;
+}
+const revNames = names => names.slice().reverse().map(n => n[0] === '-' ? n.slice(1) : '-' + n);
+function locDist(a, b) {
+  const k1 = a + '|' + b, k2 = b + '|' + a;
+  if (KMFIX[k1] || KMFIX[k2]) return (KMFIX[k1] || KMFIX[k2]) * 1000;
+  return Math.abs(NET.loc[a].km - NET.loc[b].km) * 1000;
+}
+
+const T = (h, m) => h * 3600 + m * 60;
+function mkSvc(num, cat, names, t0, stopFn, o) {
+  o = o || {};
+  const c = CAT[cat], cor = corridor(names), plan = [];
+  let t = t0, prevStop = true;
+  cor.forEach((x, i) => {
+    const L = NET.loc[x.loc], isStart = i === 0, isEnd = i === cor.length - 1;
+    const rev = (o.rev || []).includes(x.loc), st = NET.st[x.loc];
+    let stop = L.type === 'bound' ? false : (isStart || isEnd || rev) ? true : !!stopFn(L, x.loc);
+    if (stop && !isStart && !isEnd && !rev && st && !st.pax) stop = false; // goods-only junctions
+    if (!isStart) {
+      const prev = cor[i - 1], v = Math.min(c.vmax, prev.v) / 3.6;
+      let rt = locDist(prev.loc, x.loc) / v;
+      if (prevStop) rt += v / (2 * c.acc);
+      if (stop) rt += v / (2 * c.dec);
+      if (L.type === 'st') rt += 25;
+      // recovery allowance: fast trains share track with stopping urbanos, so they get more
+      t += rt * ({ AP: 1.25, IC: 1.25, REG: 1.15, INT: 1.15, IR: 1.12, RD: 1.1, ESP: 1.15, MERC: 1.12 }[cat] || 1.08);
+    }
+    if (L.type === 'halt' && !stop) { prevStop = false; return; }
+    if (stop) {
+      const arr = isStart ? t : Math.round(t / 60) * 60;
+      const dwell = isStart || isEnd ? 0 : rev ? (c.man || 120) + 120 : (L.type === 'halt' ? c.dwell : c.dwell + 15);
+      const dep = isStart ? t : Math.ceil((t + dwell) / 60) * 60;
+      plan.push({ loc: x.loc, t: arr, dep, stop: true, rev });
+      t = dep;
+    } else plan.push({ loc: x.loc, t: Math.round(t / 30) * 30, dep: Math.round(t / 30) * 30, stop: false });
+    prevStop = stop;
+  });
+  const svc = { id: String(num), num: String(num), cat, plan, len: o.len, names, title: o.title,
+    origin: NET.loc[plan[0].loc].type === 'bound' ? 'bound' : 'st', next: null, linkedFrom: null };
+  svc.spawnT = svc.origin === 'bound' ? plan[0].t : plan[0].dep - 480;
+  svc.from = NET.loc[plan[0].loc].name; svc.to = NET.loc[plan[plan.length - 1].loc].name;
+  SIM.svc.push(svc); SIM.svcById[svc.id] = svc;
+  return svc;
+}
+
+const SCN = {
+  wk: { id: 'wk', day: 'Terça-feira', label: 'Ponta da manhã', t0: T(5, 30), t1: T(10, 0),
+    note: 'Urbanos a cada 30 min para Braga e Aveiro, mercadorias para os terminais, um especial escolar com inversão em Trofa.' },
+  sat: { id: 'sat', day: 'Sábado', label: 'Manhã calma', t0: T(7, 0), t1: T(11, 30),
+    note: 'Metade dos urbanos, pouca carga. O Comboio do Vinho sai de Valença para a Régua e inverte em Campanhã.' },
+  fri: { id: 'fri', day: 'Sexta-feira', label: 'Ponta da tarde', t0: T(16, 30), t1: T(21, 0),
+    note: 'Saída de Porto carregada: reforços para Braga e Guimarães, especial de adeptos e um especial Régua → Viana.' },
+};
+function buildTimetable(scn) {
+  SIM.svc = []; SIM.svcById = {};
+  const k = scn.id, A = scn.t0 + 240, Z = scn.t1 - 360, inWin = t => t >= A && t <= Z;
+  const pick = (wk, sat, fri) => ({ wk, sat, fri })[k];
+  // clock-face departures: `off` minutes past the step boundary, every `step` minutes
+  const ser = (off, step, a = A, b = Z) => { const out = []; if (!step) return out; const st = step * 60; for (let t = Math.ceil((a - off * 60) / st) * st + off * 60; t <= b; t += st) out.push(t); return out; };
+  const P_ERM = ['SB_CMP', 'CMP_CTM', 'CTM_ERM'];
+  const BRAGA = [...P_ERM, 'ERM_LSD', 'LSD_NIN', 'NIN_BRG'];
+  const GUIM = [...P_ERM, 'ERM_LSD', 'LSD_GMR'];
+  const CAIDE = [...P_ERM, 'ERM_CAI'];
+  const MARCO = [...CAIDE, 'CAI_MCN'];
+  const MINHO = [...P_ERM, 'ERM_LSD', 'LSD_NIN', 'NIN_TUI'];
+  const DOURO = [...MARCO, 'MCN_POC'];
+  const all = () => true;
+  const only = (...ids) => (L, id) => ids.includes(id) || ids.includes(L.name);
+  const north = (L, id) => ['CMP', 'ERM', 'TRF', 'FML', 'NIN'].includes(id) || L.km > 42.5;
+
+  // Urbanos de Braga (Friday evening: semidirects on the half hours)
+  ser(15, pick(30, 60, 30)).forEach((t, i) => mkSvc(15501 + 2 * i, 'URB', BRAGA, t, all));
+  ser(10, pick(30, 60, 30)).forEach((t, i) => mkSvc(15500 + 2 * i, 'URB', revNames(BRAGA), t, all));
+  if (k === 'fri') ser(0, 30, T(17, 0), T(19, 30)).forEach((t, i) => mkSvc(15601 + 2 * i, 'URB', BRAGA, t, only('CMP', 'ERM', 'TRF', 'LSD', 'FML', 'NIN', 'TDM')));
+  // Urbanos de Guimarães
+  ser(10, 60).forEach((t, i) => mkSvc(15201 + 2 * i, 'URB', GUIM, t, all));
+  ser(35, 60).forEach((t, i) => mkSvc(15200 + 2 * i, 'URB', revNames(GUIM), t, all));
+  if (k === 'fri') ser(40, 60, T(17, 0), T(19, 0)).forEach((t, i) => mkSvc(15251 + 2 * i, 'URB', GUIM, t, all));
+  // Urbanos de Caíde / Marco de Canaveses
+  ser(5, 60).forEach((t, i) => mkSvc(15401 + 2 * i, 'URB', CAIDE, t, all));
+  ser(50, 60).forEach((t, i) => mkSvc(15400 + 2 * i, 'URB', revNames(CAIDE), t, all));
+  ser(35, pick(60, 120, 60)).forEach((t, i) => mkSvc(15451 + 2 * i, 'URB', MARCO, t, all));
+  ser(40, pick(60, 120, 60)).forEach((t, i) => mkSvc(15450 + 2 * i, 'URB', revNames(MARCO), t, all));
+  // Urbanos de Aveiro (Linha do Norte) — terminam e invertem em Campanhã
+  ser(18, pick(30, 60, 30)).forEach((t, i) => mkSvc(16001 + 2 * i, 'URB', ['NORTE_CMP'], t, all));
+  ser(5, pick(30, 60, 30)).forEach((t, i) => mkSvc(16000 + 2 * i, 'URB', ['-NORTE_CMP'], t, all));
+  // Regionais do Minho: Valença and Viana alternate (off > 60 = the odd hour)
+  const regTo = (num, t0, end) => cut(mkSvc(num, 'REG', MINHO, t0, north), end);
+  const regFrom = (num, t0, start) => cutStart(mkSvc(num, 'REG', revNames(MINHO), t0, north), start, t0);
+  const rs = pick(120, 240, 120);
+  ser(20, rs).forEach((t, i) => regTo(4401 + 2 * i, t, 'VLC'));
+  ser(rs === 240 ? 140 : 80, rs).forEach((t, i) => regTo(4451 + 2 * i, t, 'VCT'));
+  ser(105, rs).forEach((t, i) => regFrom(4400 + 2 * i, t, 'VLC'));
+  ser(30, rs).forEach((t, i) => regFrom(4450 + 2 * i, t, 'VCT'));
+  // Celta Porto ⇄ Vigo
+  const CELTA = ['CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_TUI'];
+  pick([T(8, 15)], [T(8, 15)], [T(19, 22)]).filter(inWin).forEach((t, i) => mkSvc(421 + 2 * i, 'INT', CELTA, t, only('NIN', 'BCL', 'VCT', 'VLC')));
+  pick([T(7, 25)], [T(7, 25)], [T(17, 40)]).filter(inWin).forEach((t, i) => mkSvc(420 + 2 * i, 'INT', revNames(CELTA), t, only('VLC', 'VCT', 'BCL', 'NIN')));
+  // Alfa Pendular / Intercidades (Lisboa)
+  const AP = ['NORTE_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_BRG'], IC = ['NORTE_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_GMR'];
+  pick([T(7, 52)], [T(8, 52)], [T(17, 52), T(19, 52)]).filter(inWin).forEach((t, i) => mkSvc(131 + 2 * i, 'AP', AP, t, only('CMP', 'FML')));
+  pick([T(6, 30), T(9, 30)], [T(7, 30), T(10, 30)], [T(17, 30), T(19, 30)]).filter(inWin).forEach((t, i) => mkSvc(130 + 2 * i, 'AP', revNames(AP), t, only('CMP', 'FML')));
+  pick([T(8, 48)], [T(9, 48)], [T(18, 48)]).filter(inWin).forEach((t, i) => mkSvc(621 + 2 * i, 'IC', IC, t, only('CMP', 'STS', 'VZL')));
+  pick([T(6, 52)], [T(7, 52)], [T(17, 52)]).filter(inWin).forEach((t, i) => mkSvc(620 + 2 * i, 'IC', revNames(IC), t, only('VZL', 'STS', 'CMP')));
+  // Douro
+  const irStops = only('CMP', 'ERM', 'PRD', 'Penafiel', 'CAI', 'LVR', 'MCN', 'MST', 'ARG', 'ERD', 'RGA');
+  pick([T(7, 20), T(9, 20)], [T(8, 20), T(10, 20)], [T(17, 20), T(19, 20)]).filter(inWin).forEach((t, i) => mkSvc(861 + 2 * i, 'IR', DOURO, t, irStops));
+  pick([T(6, 25)], [T(7, 25), T(9, 25)], [T(16, 45), T(18, 25)]).filter(inWin).forEach((t, i) => mkSvc(860 + 2 * i, 'IR', revNames(DOURO), t, irStops));
+  ser(50, 120).forEach((t, i) => cut(mkSvc(4601 + 2 * i, 'RD', ['MCN_POC'], t, all), 'RGA'));
+  ser(100, 120).forEach((t, i) => cutStart(mkSvc(4600 + 2 * i, 'RD', ['-MCN_POC'], t, all), 'RGA', t));
+
+  // Mercadorias — Leixões, Devesas (Linha do Norte), Vigo and the goods terminals
+  const F = {
+    LX_TUI: ['LXS_SGM', 'SGM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_TUI'],
+    LX_NORTE: ['LXS_SGM', 'SGM_CTM', '-CMP_CTM', '-NORTE_CMP'],
+    DEV_TUI: ['NORTE_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_TUI'],
+    DEV_MINHO: ['NORTE_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_BRG'],
+    DEV_DOURO: ['NORTE_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_CAI', 'CAI_MCN', 'MCN_POC'],
+    LX_MINHO: ['LXS_SGM', 'SGM_ERM', 'ERM_LSD'],
+    LX_GUIM: ['LXS_SGM', 'SGM_ERM', 'ERM_LSD', 'LSD_GMR'],
+  };
+  const none = () => false;
+  // [number, corridor, reverse?, time, length, terminal to end at (outbound) or start from (return)]
+  const goodsList = {
+    wk: [[62501, 'LX_TUI', 0, T(5, 50), 400], [62500, 'LX_TUI', 1, T(6, 30), 400], [54001, 'LX_NORTE', 1, T(6, 55), 600], [54003, 'LX_NORTE', 0, T(8, 40), 550],
+      [62503, 'DEV_TUI', 0, T(8, 0), 400],
+      [69101, 'DEV_MINHO', 0, T(5, 55), 450, 'CIM'], [69102, 'DEV_MINHO', 1, T(8, 50), 450, 'CIM'],
+      [69301, 'DEV_MINHO', 0, T(6, 40), 500, 'TDM'], [69302, 'DEV_MINHO', 1, T(9, 15), 500, 'TDM'],
+      [69201, 'LX_MINHO', 0, T(7, 5), 500, 'LEA'], [69202, 'LX_MINHO', 1, T(9, 25), 500, 'LEA'],
+      [69601, 'LX_GUIM', 0, T(6, 10), 280, 'SMC'], [69602, 'LX_GUIM', 1, T(8, 45), 280, 'SMC']],
+    sat: [[62501, 'LX_TUI', 0, T(7, 20), 400], [54001, 'LX_NORTE', 1, T(8, 15), 600],
+      [69401, 'LX_TUI', 0, T(7, 40), 400, 'DRQ'], [69402, 'LX_TUI', 1, T(10, 35), 400, 'DRQ'],
+      [69501, 'DEV_DOURO', 0, T(7, 30), 300, 'GOD']],
+    fri: [[62500, 'LX_TUI', 1, T(16, 50), 400], [54003, 'LX_NORTE', 0, T(17, 10), 550], [62503, 'DEV_TUI', 0, T(19, 40), 400],
+      [69401, 'LX_TUI', 0, T(16, 40), 400, 'DRQ'], [69402, 'LX_TUI', 1, T(19, 20), 400, 'DRQ'],
+      [69502, 'DEV_DOURO', 1, T(17, 5), 300, 'GOD'],
+      [69101, 'DEV_MINHO', 0, T(16, 45), 450, 'CIM'], [69102, 'DEV_MINHO', 1, T(19, 30), 450, 'CIM'],
+      [69302, 'DEV_MINHO', 1, T(17, 35), 500, 'TDM']],
+  }[k];
+  for (const [num, cor, back, t, len, term] of goodsList) {
+    const names = back ? revNames(F[cor]) : F[cor];
+    const sv = mkSvc(num, 'MERC', names, t, none, { len });
+    if (term && back) cutStart(sv, term, t); else if (term) cut(sv, term);
+  }
+
+  // Comboios especiais (loco-hauled: reversals need the locomotive to run round)
+  const MINHO_UP = revNames(['CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_TUI']), DOURO_DN = ['CMP_CTM', 'CTM_ERM', 'ERM_CAI', 'CAI_MCN', 'MCN_POC'];
+  if (k === 'wk') mkSvc(29011, 'ESP', ['-NIN_BRG', '-LSD_NIN', '-TRF_LSD', 'TRF_LSD', 'LSD_GMR'], T(8, 35), only('BRG', 'GMR'),
+    { rev: ['TRF'], title: 'Especial escolar Braga → Guimarães' });
+  if (k === 'sat') cut(cutStart(mkSvc(29021, 'ESP', [...MINHO_UP, ...DOURO_DN], T(7, 20), only('VCT', 'BCL', 'RGA'),
+    { rev: ['CMP'], title: 'Comboio do Vinho · Valença → Régua', len: 220 }), 'VLC', T(7, 20)), 'RGA');
+  if (k === 'fri') {
+    cut(cutStart(mkSvc(29031, 'ESP', [...revNames(DOURO_DN), ...revNames(MINHO_UP)], T(16, 45), only('MCN', 'BCL', 'VCT'),
+      { rev: ['CMP'], title: 'Especial Régua → Viana do Castelo', len: 220 }), 'RGA', T(16, 45)), 'VCT');
+    mkSvc(29033, 'ESP', revNames(['CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_GMR']), T(18, 40), only('VZL', 'STS'),
+      { title: 'Especial adeptos Guimarães → Campanhã (Dragão)' });
+  }
+
+  // turnarounds (rotações de material): link arrivals at termini to later departures
+  const arrivals = SIM.svc.filter(s => NET.loc[s.plan[s.plan.length - 1].loc].type === 'st').sort((a, b) => a.plan[a.plan.length - 1].t - b.plan[b.plan.length - 1].t);
+  for (const a of arrivals) {
+    const last = a.plan[a.plan.length - 1], turn = a.cat === 'URB' ? 420 : a.cat === 'MERC' ? 2400 : 900;
+    const dep = SIM.svc.filter(s => s !== a && !s.linkedFrom && s.origin === 'st' && s.cat === a.cat && s.plan[0].loc === last.loc && s.plan[0].dep >= last.t + turn && s.plan[0].dep <= last.t + 4 * 3600)
+      .sort((x, y) => x.plan[0].dep - y.plan[0].dep)[0];
+    if (dep) { a.next = dep.id; dep.linkedFrom = a.id; }
+  }
+  SIM.svc.sort((a, b) => a.plan[0].t - b.plan[0].t);
+}
+// trim a service so it ends / starts at a given station (recomputes nothing — times stay valid)
+function cut(s, end) {
+  const i = s.plan.findIndex(p => p.loc === end); s.plan = s.plan.slice(0, i + 1);
+  const l = s.plan[s.plan.length - 1]; l.stop = true; l.dep = l.t; s.to = NET.loc[end].name;
+}
+// start a service at an intermediate station, departing there at time t0
+function cutStart(s, start, t0) {
+  const i = s.plan.findIndex(p => p.loc === start), base = s.plan[i];
+  const shift = t0 - base.dep;
+  s.plan = s.plan.slice(i);
+  for (const p of s.plan) { p.t += shift; p.dep += shift; }
+  s.plan[0].stop = true; s.plan[0].t = t0; s.plan[0].dep = t0;
+  s.origin = 'st'; s.from = NET.loc[start].name; s.spawnT = t0 - 480;
+  return s;
+}
+
+</script>
+<script>
+'use strict';
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER — mimic panel (quadro sinóptico) on canvas, minimap, hit testing
+// ─────────────────────────────────────────────────────────────────────────────
+const COL = {
+  idle: '#4f6072', idleSt: '#6d7f92', route: '#2fdc6a', occ: '#ff4848', fail: '#ff9a1f', cancel: '#9ff0bd',
+  red: '#ff3b3b', yel: '#ffd23a', grn: '#2fdc6a', sigOff: '#26313d', text: '#c9d4df', dim: '#6f8296', faint: '#45566a',
+  ip: '#3fb0c9', plat: '#9fb0c2', urb: '#3fd08a', reg: '#5aa9ff', ld: '#ff7ad1', int: '#ffd23a', merc: '#d7955a',
+  esp: '#c3a6ff', soc: '#f4f7fa', shunt: '#7fd8ec',
+};
+const VIEW = { x: 1200, y: 640, z: 0.5, W: 800, H: 600, dpr: 1 };
+const UI = { entry: null, hoverExit: null, selTrain: null, blink: false, mouse: null };
+
+const w2s = (x, y) => [(x - VIEW.x) * VIEW.z + VIEW.W / 2, (y - VIEW.y) * VIEW.z + VIEW.H / 2];
+const s2w = (x, y) => [(x - VIEW.W / 2) / VIEW.z + VIEW.x, (y - VIEW.H / 2) / VIEW.z + VIEW.y];
+
+function edgePts(e) { return e.pts || [[N(e.a).x, N(e.a).y], [N(e.b).x, N(e.b).y]]; }
+function polyLen(p) { let l = 0; for (let i = 1; i < p.length; i++) l += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return l; }
+// point at fraction f (0 = node a, 1 = node b) along the drawn polyline
+function edgeAt(e, f) {
+  const p = edgePts(e), L = polyLen(p); let d = Math.max(0, Math.min(1, f)) * L;
+  for (let i = 1; i < p.length; i++) {
+    const s = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+    if (d <= s || i === p.length - 1) { const k = s ? d / s : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k, p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]]; }
+    d -= s;
+  }
+}
+function edgeSlice(e, f0, f1) {
+  const p = edgePts(e), L = polyLen(p), out = [edgeAt(e, f0).slice(0, 2)];
+  let acc = 0;
+  for (let i = 1; i < p.length - 1; i++) { acc += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); const f = acc / L; if (f > Math.min(f0, f1) && f < Math.max(f0, f1)) out.push(p[i]); }
+  if (f0 > f1) { const mid = out.slice(1).reverse(); out.length = 1; out.push(...mid); }
+  out.push(edgeAt(e, f1).slice(0, 2));
+  return out;
+}
+// signal glyph position: just in rear of its node, on the driver's left
+function sigPos(s) {
+  if (s._p) return s._p;
+  const n = N(s.n), e = E(s.e), u = dirFrom(n, e); // u points back along the approach
+  const tx = -u[0], ty = -u[1];
+  const lx = ty, ly = -tx; // left of travel on screen (y down)
+  s._p = { x: n.x + u[0] * 6, y: n.y + u[1] * 6, lx, ly, tx, ty };
+  return s._p;
+}
+function trainLine(t) {
+  // world polyline from tail to head
+  const out = []; let covered = trainCovered(t), tailOff = covered - t.len;
+  t.path.forEach((p, i) => {
+    const e = E(p.e);
+    const o0 = i === 0 ? Math.max(0, tailOff) : 0, o1 = i === t.path.length - 1 ? t.headOff : e.len;
+    const fa = o => p.d > 0 ? o / e.len : 1 - o / e.len;
+    const seg = edgeSlice(e, fa(o0), fa(o1));
+    out.push(...(out.length ? seg.slice(1) : seg));
+  });
+  return out;
+}
+function headInfo(t) {
+  const h = t.path[t.path.length - 1], e = E(h.e);
+  const f = h.d > 0 ? t.headOff / e.len : 1 - t.headOff / e.len;
+  const p = edgeAt(e, f); const dx = p[2] * h.d, dy = p[3] * h.d, l = Math.hypot(dx, dy) || 1;
+  return { x: p[0], y: p[1], dx: dx / l, dy: dy / l };
+}
+
+let cv, cx, mini, mx;
+function initRender() {
+  cv = document.getElementById('cv'); cx = cv.getContext('2d');
+  mini = document.getElementById('mini'); mx = mini.getContext('2d');
+  // world bounds
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const n of NET.nodes) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); }
+  VIEW.bounds = [x0 - 60, y0 - 60, x1 + 60, y1 + 60];
+  resize(); window.addEventListener('resize', resize);
+}
+function resize() {
+  const r = cv.getBoundingClientRect(); VIEW.dpr = window.devicePixelRatio || 1;
+  VIEW.W = r.width; VIEW.H = r.height;
+  cv.width = Math.round(r.width * VIEW.dpr); cv.height = Math.round(r.height * VIEW.dpr);
+  const m = mini.getBoundingClientRect(); mini.width = m.width * VIEW.dpr; mini.height = m.height * VIEW.dpr;
+}
+function fitView(x0, y0, x1, y1) {
+  VIEW.x = (x0 + x1) / 2; VIEW.y = (y0 + y1) / 2;
+  VIEW.z = Math.min(4, Math.max(0.12, Math.min(VIEW.W / (x1 - x0), VIEW.H / (y1 - y0))));
+}
+function deskBox(d) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const id in NET.st) { const st = NET.st[id]; if (st.desk !== d) continue; x0 = Math.min(x0, st.x1 - 70); x1 = Math.max(x1, st.x2 + 70); y0 = Math.min(y0, st.y1 - 50); y1 = Math.max(y1, st.y2 + 40); }
+  return [x0, y0, x1, y1];
+}
+
+function edgeColor(e) {
+  if (e.fail > 0) return UI.blink ? COL.fail : '#7a4a10';
+  if (e.occ.size) return COL.occ;
+  if (e.lock) { if (e.lock.state === 'cancel') return UI.blink ? COL.cancel : COL.idle; if (e.lock.state === 'shunt' || e.lock.state === 'man') return COL.shunt; return COL.route; }
+  return e.st ? COL.idleSt : COL.idle;
+}
+function connectedAt(e, nid) {
+  const n = N(nid); if (n.type !== 'point') return true;
+  if (e.id === n.c) return true;
+  return n.pos === 'N' ? e.id === n.nrm : e.id === n.rev;
+}
+
+function draw() {
+  const { W, H, dpr, z } = VIEW;
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.fillStyle = '#04070c'; cx.fillRect(0, 0, W, H);
+  cx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (W / 2 - VIEW.x * z), dpr * (H / 2 - VIEW.y * z));
+  const px = 1 / z; // one screen pixel in world units
+  const [vx0, vy0] = s2w(-40, -40), [vx1, vy1] = s2w(W + 40, H + 40);
+  const vis = (x, y) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
+  cx.lineCap = 'round'; cx.lineJoin = 'round';
+
+  // station plates
+  cx.textAlign = 'center'; cx.textBaseline = 'alphabetic';
+  for (const id in NET.st) {
+    const st = NET.st[id];
+    if (!vis(st.x, st.y) && !vis(st.x1, st.y) && !vis(st.x2, st.y)) continue;
+    cx.fillStyle = 'rgba(63,176,201,0.045)';
+    cx.fillRect(st.x1 - 6, st.y1 - 10, st.x2 - st.x1 + 12, st.y2 - st.y1 + 20);
+    cx.font = `600 ${Math.max(11, 13) * px}px 'Barlow Condensed', sans-serif`;
+    cx.fillStyle = COL.text;
+    cx.fillText(st.name.toUpperCase(), st.x, st.y1 - 15 * px - 4);
+    if (z > 0.55) {
+      cx.font = `500 ${9.5 * px}px 'IBM Plex Mono', monospace`; cx.fillStyle = COL.faint;
+      cx.fillText(`${st.short} · km ${st.km.toFixed(1)} · M${st.desk}${st.term ? ' · terminal' : ''}${st.id === 'CTM' ? ' · base do Socorro' : ''}`, st.x, st.y2 + 14 * px + 4);
+    }
+  }
+  // edges
+  for (const e of NET.edges) {
+    const a = N(e.a), b = N(e.b);
+    if (!vis(a.x, a.y) && !vis(b.x, b.y) && !(e.pts && e.pts.some(p => vis(p[0], p[1])))) continue;
+    let p = edgePts(e).map(q => q.slice());
+    const gap = 7 * px;
+    for (const [end, idx] of [[e.a, 0], [e.b, p.length - 1]]) {
+      if (!connectedAt(e, end)) {
+        const o = idx === 0 ? p[1] : p[p.length - 2], q = p[idx], l = Math.hypot(o[0] - q[0], o[1] - q[1]) || 1;
+        const g = Math.min(gap, l * 0.45); p[idx] = [q[0] + (o[0] - q[0]) / l * g, q[1] + (o[1] - q[1]) / l * g];
+      }
+    }
+    cx.strokeStyle = edgeColor(e);
+    cx.lineWidth = (e.stTrack ? 3.2 : 3) * px;
+    cx.beginPath(); cx.moveTo(p[0][0], p[0][1]); for (let i = 1; i < p.length; i++) cx.lineTo(p[i][0], p[i][1]); cx.stroke();
+    // CDV joints
+    if (z > 0.7) { cx.fillStyle = '#04070c'; for (const q of [p[0], p[p.length - 1]]) cx.fillRect(q[0] - 0.6 * px, q[1] - 2.2 * px, 1.2 * px, 4.4 * px); }
+    if (e.plat && z > 0.35) {
+      cx.strokeStyle = COL.plat; cx.lineWidth = 1.4 * px;
+      cx.beginPath(); cx.moveTo(a.x + 10, a.y + 4.5 * px + 1); cx.lineTo(b.x - 10, b.y + 4.5 * px + 1); cx.stroke();
+    }
+    if (e.stTrack && z > 0.5) {
+      cx.font = `500 ${9 * px}px 'IBM Plex Mono', monospace`; cx.fillStyle = e.plat ? COL.dim : COL.faint; cx.textAlign = 'right';
+      cx.fillText(e.tname, a.x - 3 * px, a.y + 3 * px);
+    }
+  }
+  // halts
+  if (z > 0.3) for (const h of NET.halts) {
+    if (!vis(h.x, h.y)) continue;
+    cx.strokeStyle = COL.plat; cx.lineWidth = 1.2 * px;
+    cx.beginPath(); cx.moveTo(h.x, h.y - 12 * px); cx.lineTo(h.x, h.y + 12 * px); cx.stroke();
+    if (z > 0.55) { cx.save(); cx.translate(h.x + 3 * px, h.y + 16 * px); cx.rotate(0.6); cx.font = `500 ${9.5 * px}px 'Barlow', sans-serif`; cx.fillStyle = COL.dim; cx.textAlign = 'left'; cx.fillText(h.name, 0, 0); cx.restore(); }
+  }
+  // boundaries
+  for (const k in NET.bounds) {
+    const b = NET.bounds[k]; cx.font = `600 ${12 * px}px 'Barlow Condensed', sans-serif`; cx.fillStyle = COL.ip; cx.textAlign = k === 'NORTE' ? 'right' : 'left';
+    cx.fillText(b.label.toUpperCase(), b.x + (k === 'NORTE' ? -10 : 10) * px, b.y + 4 * px);
+  }
+  // route preview (hovered exit)
+  if (UI.hoverRoute) {
+    cx.strokeStyle = COL.ip; cx.lineWidth = 6 * px; cx.globalAlpha = 0.35;
+    for (const x of UI.hoverRoute.edges) { const p = edgePts(E(x.e)); cx.beginPath(); cx.moveTo(p[0][0], p[0][1]); for (let i = 1; i < p.length; i++) cx.lineTo(p[i][0], p[i][1]); cx.stroke(); }
+    cx.globalAlpha = 1;
+  }
+  // points
+  for (const n of NET.points) {
+    if (!vis(n.x, n.y)) continue;
+    if (n.fail > 0) { cx.strokeStyle = COL.fail; cx.lineWidth = 1.6 * px; cx.beginPath(); cx.arc(n.x, n.y, 6 * px, 0, 7); cx.stroke(); }
+    else if (n.moving > 0 && UI.blink) { cx.fillStyle = '#ffffff'; cx.beginPath(); cx.arc(n.x, n.y, 3 * px, 0, 7); cx.fill(); }
+    if (z > 2.4) { cx.font = `500 ${8 * px}px 'IBM Plex Mono', monospace`; cx.fillStyle = COL.faint; cx.textAlign = 'center'; cx.fillText(n.pname.split(' ')[1] || '', n.x, n.y - 7 * px); }
+  }
+  // signals
+  const exitSet = new Set(), exitNodes = new Set();
+  if (UI.entry !== null) for (const id of S(UI.entry).routes) { const r = ROUTES[id]; if (r.exit >= 0) exitSet.add(r.exit); else exitNodes.add(r.endNode); }
+  for (const s of NET.signals) {
+    const p = sigPos(s); if (!vis(p.x, p.y)) continue;
+    if (s.kind === 'auto' && z < 0.3) continue;
+    const off = s.kind === 'main' ? 9 : 7, r = (s.kind === 'main' ? 3.8 : 2.8) * px;
+    const hx = p.x + p.lx * off * px, hy = p.y + p.ly * off * px;
+    cx.strokeStyle = COL.dim; cx.lineWidth = 1 * px;
+    cx.beginPath(); cx.moveTo(p.x + p.lx * 2 * px, p.y + p.ly * 2 * px); cx.lineTo(hx, hy); cx.stroke();
+    if (s.kind === 'main') { cx.beginPath(); cx.moveTo(p.x + p.lx * 2 * px - p.tx * 3 * px, p.y + p.ly * 2 * px - p.ty * 3 * px); cx.lineTo(p.x + p.lx * 2 * px + p.tx * 3 * px, p.y + p.ly * 2 * px + p.ty * 3 * px); cx.stroke(); }
+    const auth = SIM.trains.some(t => t.authSig === s.id);
+    cx.fillStyle = auth ? (UI.blink ? '#ffffff' : COL.red) : s.aspect === 2 ? COL.grn : s.aspect === 1 ? COL.yel : COL.red;
+    if (s.kind === 'auto' && s.aspect === 0) cx.fillStyle = '#b02a2a';
+    cx.beginPath(); cx.arc(hx, hy, r, 0, 7); cx.fill();
+    if (s.fleet) { cx.strokeStyle = COL.ip; cx.lineWidth = 1.2 * px; cx.beginPath(); cx.arc(hx, hy, r + 2.5 * px, 0, 7); cx.stroke(); }
+    if (UI.entry === s.id) { cx.strokeStyle = '#ffffff'; cx.lineWidth = 1.8 * px; cx.beginPath(); cx.arc(hx, hy, r + (UI.blink ? 5 : 3.5) * px, 0, 7); cx.stroke(); }
+    if (exitSet.has(s.id)) { cx.strokeStyle = COL.ip; cx.lineWidth = 2 * px; cx.beginPath(); cx.arc(hx, hy, r + 4 * px, 0, 7); cx.stroke(); }
+    s._h = [hx, hy];
+    if (s.kind === 'main' && z > 1.8) { cx.font = `500 ${8.5 * px}px 'IBM Plex Mono', monospace`; cx.fillStyle = COL.faint; cx.textAlign = 'center'; cx.fillText(s.name.split(' ')[1], hx + p.lx * 9 * px, hy + p.ly * 9 * px + 3 * px); }
+  }
+  for (const nid of exitNodes) { const n = N(nid); cx.strokeStyle = COL.ip; cx.lineWidth = 2 * px; cx.beginPath(); cx.arc(n.x, n.y, 7 * px, 0, 7); cx.stroke(); }
+  // trains
+  for (const t of SIM.trains) {
+    const line = trainLine(t), col = COL[CAT[t.cat].cls];
+    cx.strokeStyle = col; cx.lineWidth = 5 * px;
+    cx.beginPath(); cx.moveTo(line[0][0], line[0][1]); for (let i = 1; i < line.length; i++) cx.lineTo(line[i][0], line[i][1]); cx.stroke();
+    const h = headInfo(t);
+    cx.fillStyle = '#ffffff'; cx.beginPath(); cx.arc(h.x, h.y, 2.6 * px, 0, 7); cx.fill();
+    // descriptor (berth)
+    const up = h.dx >= 0 ? -1 : 1;
+    const label = t.num, fs = 10.5;
+    cx.font = `600 ${fs * px}px 'IBM Plex Mono', monospace`;
+    const tw = cx.measureText(label).width, bw = tw + 8 * px, bh = 14 * px;
+    const bx = h.x - bw / 2 - h.dx * 6 * px, by = h.y + up * 14 * px - bh / 2;
+    cx.fillStyle = '#04070c'; cx.fillRect(bx, by, bw, bh);
+    cx.strokeStyle = UI.selTrain === t ? '#ffffff' : col; cx.lineWidth = (UI.selTrain === t ? 1.8 : 1) * px; cx.strokeRect(bx, by, bw, bh);
+    cx.fillStyle = col; cx.textAlign = 'center'; cx.fillText(label, bx + bw / 2, by + bh - 3.5 * px);
+    // direction chevron
+    cx.beginPath(); const ax = h.dx >= 0 ? bx + bw + 2 * px : bx - 2 * px, ay = by + bh / 2, sgn = h.dx >= 0 ? 1 : -1;
+    cx.moveTo(ax, ay - 4 * px); cx.lineTo(ax + sgn * 5 * px, ay); cx.lineTo(ax, ay + 4 * px); cx.fill();
+    const dl = liveDelay(t);
+    if (dl >= 120 && z > 0.45) { cx.font = `600 ${9 * px}px 'IBM Plex Mono', monospace`; cx.fillStyle = dl >= 300 ? COL.red : COL.yel; cx.textAlign = 'left'; cx.fillText('+' + Math.floor(dl / 60), bx + bw + 9 * px, by + bh - 3.5 * px); }
+    if (t.fault > 0 || t.blockedBy === 'wrong' || t.manWait || (t.state === 'swait')) { cx.strokeStyle = UI.blink ? COL.fail : 'transparent'; cx.lineWidth = 1.5 * px; cx.strokeRect(bx - 3 * px, by - 3 * px, bw + 6 * px, bh + 6 * px); }
+    t._box = [bx, by, bw, bh];
+  }
+}
+
+function drawMini() {
+  const W = mini.width, H = mini.height, [x0, y0, x1, y1] = VIEW.bounds;
+  const k = Math.min(W / (x1 - x0), H / (y1 - y0)), ox = (W - (x1 - x0) * k) / 2, oy = (H - (y1 - y0) * k) / 2;
+  const m = (x, y) => [ox + (x - x0) * k, oy + (y - y0) * k];
+  mx.fillStyle = '#04070c'; mx.fillRect(0, 0, W, H);
+  mx.lineWidth = Math.max(1, VIEW.dpr);
+  for (const e of NET.edges) {
+    const p = edgePts(e); mx.strokeStyle = e.occ.size ? COL.occ : e.lock ? COL.route : '#2e3b4a';
+    mx.beginPath(); const a = m(p[0][0], p[0][1]); mx.moveTo(a[0], a[1]); for (let i = 1; i < p.length; i++) { const b = m(p[i][0], p[i][1]); mx.lineTo(b[0], b[1]); } mx.stroke();
+  }
+  const [a0, b0] = s2w(0, 0), [a1, b1] = s2w(VIEW.W, VIEW.H), p0 = m(a0, b0), p1 = m(a1, b1);
+  mx.strokeStyle = COL.ip; mx.strokeRect(p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1]);
+  mini._map = { x0, y0, k, ox, oy };
+}
+
+// ── hit testing (screen coords) ─────────────────────────────────────────────
+function hitSignal(sx, sy, mainOnly) {
+  let best = null, bd = 11;
+  for (const s of NET.signals) {
+    if (!s._h || (mainOnly && s.kind !== 'main')) continue;
+    const [x, y] = w2s(s._h[0], s._h[1]), d = Math.hypot(x - sx, y - sy);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function hitTrain(sx, sy) {
+  const [wx, wy] = s2w(sx, sy);
+  for (const t of SIM.trains) { const b = t._box; if (b && wx >= b[0] - 2 / VIEW.z && wx <= b[0] + b[2] + 2 / VIEW.z && wy >= b[1] - 2 / VIEW.z && wy <= b[1] + b[3] + 2 / VIEW.z) return t; }
+  return null;
+}
+function hitPoint(sx, sy) {
+  let best = null, bd = 9;
+  for (const n of NET.points) { const [x, y] = w2s(n.x, n.y), d = Math.hypot(x - sx, y - sy); if (d < bd) { bd = d; best = n; } }
+  return best;
+}
+function hitEdge(sx, sy) {
+  const [wx, wy] = s2w(sx, sy); let best = null, bd = 8 / VIEW.z;
+  for (const e of NET.edges) {
+    const p = edgePts(e);
+    for (let i = 1; i < p.length; i++) {
+      const ax = p[i - 1][0], ay = p[i - 1][1], bx = p[i][0], by = p[i][1], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
+      const f = Math.max(0, Math.min(1, ((wx - ax) * dx + (wy - ay) * dy) / l2)), d = Math.hypot(ax + f * dx - wx, ay + f * dy - wy);
+      if (d < bd) { bd = d; best = e; }
+    }
+  }
+  return best;
+}
+function hitExitNode(sx, sy) {
+  if (UI.entry === null) return null;
+  for (const id of S(UI.entry).routes) { const r = ROUTES[id]; if (r.exit >= 0) continue; const n = N(r.endNode), [x, y] = w2s(n.x, n.y); if (Math.hypot(x - sx, y - sy) < 12) return r.endNode; }
+  return null;
+}
+function liveDelay(t) {
+  if (t.state === 'base') return 0;
+  if (t.state === 'term') return t.svc.finalDelay || 0; // stabled: the arrival delay, not a growing one
+  let d = t.delay || 0;
+  const tg = t.plan && t.plan[t.state === 'dwell' ? t.pi + 1 : t.pi];
+  if (tg && SIM.t > tg.t) d = Math.max(d, SIM.t - tg.t);
+  if (t.state === 'dwell' && SIM.t > t.plan[t.pi].dep) d = Math.max(d, SIM.t - t.plan[t.pi].dep);
+  return d;
+}
+
+</script>
+<script>
+'use strict';
+// ─────────────────────────────────────────────────────────────────────────────
+// UI — controls, panels, time–distance graph, input handling, main loop
+// ─────────────────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const SPEEDS = [0, 1, 2, 5, 10, 30, 60];
+initEngine();
+initRender();
+let SCNSEL = 'wk';
+let tab = 'trains', logFilter = 'all', unseenAlarms = 0;
+
+function locName(id) { return NET.loc[id] ? NET.loc[id].name : id; }
+function shortName(n) { return n.replace(/^Porto /, '').replace(/^← /, '').replace(/ →$/, '').replace(' (terminal)', ''); }
+function fmtDelay(d) { if (d == null) return ''; const m = Math.round(d / 60); return m <= 0 ? '0' : '+' + m; }
+function delayCls(d) { return d >= 300 ? 'vlate' : d >= 120 ? 'late' : 'ontime'; }
+
+// ── header ──────────────────────────────────────────────────────────────────
+function buildHeader() {
+  $('speeds').innerHTML = SPEEDS.map(s => `<button data-s="${s}">${s === 0 ? '❚❚' : s + '×'}</button>`).join('');
+  $('speeds').onclick = e => { const b = e.target.closest('button'); if (!b) return; setSpeed(+b.dataset.s); };
+  renderDesks();
+}
+function setSpeed(s) {
+  if (s === 0) SIM.paused = true; else { SIM.paused = false; SIM.speed = s; }
+  for (const b of $('speeds').children) b.classList.toggle('on', SIM.paused ? b.dataset.s === '0' : +b.dataset.s === SIM.speed);
+}
+function renderDesks() {
+  $('desks').innerHTML = '<button class="desk" data-v="all">Rede completa</button>' + Object.entries(SIM.desks).map(([k, d]) =>
+    `<button class="desk" data-v="${k}">M${k} ${esc(d.name)} <i class="${d.auto ? 'aut' : 'man'}" data-toggle="${k}" title="Alternar manual / ARS">${d.auto ? 'ARS' : 'MANUAL'}</i></button>`).join('');
+}
+$('desks').addEventListener('click', e => {
+  const tg = e.target.closest('[data-toggle]');
+  if (tg) { const d = SIM.desks[tg.dataset.toggle]; d.auto = !d.auto; log('info', `Mesa ${tg.dataset.toggle} (${d.name}) passou a ${d.auto ? 'ARS automático' : 'comando manual'}`); renderDesks(); return; }
+  const b = e.target.closest('[data-v]'); if (!b) return;
+  if (b.dataset.v === 'all') fitView(...VIEW.bounds); else fitView(...deskBox(+b.dataset.v));
+});
+function renderKpis() {
+  const st = SIM.stats, pct = st.done ? Math.round(100 * st.punctual / st.done) : 100;
+  const avg = st.done ? (st.delaySum / st.done / 60).toFixed(1) : '0.0';
+  const k = (label, val, cls) => `<div class="kpi ${cls || ''}"><small>${label}</small><b>${val}</b></div>`;
+  const moving = SIM.trains.filter(t => t.state !== 'term' && t.state !== 'base').length;
+  const soc = SOC.train && SOC.train.state === 'base' ? ['Na base', 'good'] : SOC.train ? ['Em missão', 'bad'] : SOC.back ? ['Regresso ' + hhmm(SOC.back), ''] : ['—', ''];
+  $('kpis').innerHTML = k('Em circulação', moving) + k('Socorro', soc[0], soc[1]) + k('Pontualidade', pct + '%', pct >= 90 ? 'good' : pct < 75 ? 'bad' : '') +
+    k('Atraso médio', avg + ' min') + k('SPAD', st.spad, st.spad ? 'bad' : '') + k('Incidentes', st.incidents, st.incidents > 3 ? 'bad' : '');
+}
+
+// ── side panel ──────────────────────────────────────────────────────────────
+$('tabs').onclick = e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); };
+function showTab(t) {
+  tab = t;
+  for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.tab === t);
+  for (const p of ['trains', 'train', 'graph', 'log', 'help']) $('p-' + p).hidden = p !== t;
+  if (t === 'log') { unseenAlarms = 0; $('alarms').hidden = true; }
+  refreshPanel(true);
+}
+function refreshPanel(force) {
+  if (tab === 'trains') renderTrainList();
+  else if (tab === 'train') renderTrainCard();
+  else if (tab === 'graph') drawGraph();
+  else if (tab === 'log' && force) renderLog();
+}
+function nextInfo(t) {
+  const tg = t.plan[t.state === 'dwell' ? t.pi + 1 : t.pi];
+  if (t.state === 'base') return 'Contumil, linha S';
+  if (t.shunt) { const ft = SIM.trains.find(x => x.id === t.shunt); return ft ? `ao ${ft.num}` : '—'; }
+  if (t.state === 'swait') { const ft = SIM.trains.find(x => x.id === t.rescue); return ft ? `cantão do ${ft.num}` : '—'; }
+  if (t.state === 'term') { const nx = t.svc.next && SIM.svcById[t.svc.next]; return nx ? `forma o ${nx.num} às ${hhmm(nx.plan[0].dep)}` : 'Terminou'; }
+  if (!tg) return '—';
+  return `${locName(tg.loc)} ${hhmm(tg.stop ? tg.t : tg.t)}`;
+}
+function stateText(t) {
+  if (t.severe) return t.rescueReq ? 'Sem marcha · Socorro a caminho' : 'Sem marcha · pede Socorro';
+  if (t.fault > 0) return 'Avariado';
+  if (t.state === 'base') return 'De prevenção';
+  if (t.state === 'swait') return 'Aguarda autorização de marcha';
+  if (t.shunt) return 'Marcha de socorro à vista';
+  if (t.manWait) return 'Manobra: aguarda linha livre';
+  if (t.revAt) return 'Manobra de inversão';
+  if (t.state === 'dwell') return 'Em paragem';
+  if (t.state === 'term') return t.rescued ? 'Transbordo' : t.svc.next ? 'Estacionado' : 'Terminado';
+  if (t.v < 0.3) return t.blockedBy === 'wrong' ? 'Itinerário errado' : t.blockedBy === 'sig' ? 'Retido em sinal' : 'Parado';
+  return 'Em marcha';
+}
+function renderTrainList() {
+  const rows = [];
+  // trains on the move first (most late on top), then stabled sets, the Socorro at the bottom while on standby
+  const rank = t => t.state === 'base' ? 2 : t.state === 'term' ? 1 : 0;
+  const active = [...SIM.trains].sort((a, b) => rank(a) - rank(b) || liveDelay(b) - liveDelay(a) || a.num.localeCompare(b.num));
+  for (const t of active) {
+    const d = liveDelay(t);
+    rows.push(`<tr class="row ${UI.selTrain === t ? 'sel' : ''}" data-t="${t.id}"><td class="num"><span class="tag ${CAT[t.cat].cls}">${t.cat}</span> ${t.num}</td>
+      <td><div class="ell">${t.svc.title ? esc(t.svc.title) : `${esc(shortName(t.svc.from))} → ${esc(shortName(t.svc.to))}`}</div><div class="ell sub">${stateText(t)} · ${Math.round(t.v * 3.6)} km/h · ${esc(nextInfo(t))}</div></td>
+      <td class="t ${delayCls(d)}">${fmtDelay(d)}</td></tr>`);
+  }
+  const soon = SIM.svc.filter(s => !s.spawned && !s.linkedFrom && s.plan[0].t < SIM.t + 1800).slice(0, 14);
+  for (const s of soon) {
+    const late = SIM.t > s.plan[0].dep ? SIM.t - s.plan[0].dep : 0;
+    rows.push(`<tr class="future"><td class="num"><span class="tag ${CAT[s.cat].cls}">${s.cat}</span> ${s.num}</td><td><div class="ell">${s.title ? esc(s.title) : `${esc(shortName(s.from))} → ${esc(shortName(s.to))}`}</div><div class="ell sub">${s.origin === 'bound' ? 'Entrada' : 'Partida'} prevista ${hhmm(s.plan[0].dep)}</div></td><td class="t ${late ? 'late' : ''}">${late ? fmtDelay(late) : ''}</td></tr>`);
+  }
+  $('p-trains').innerHTML = `<table class="fixed"><colgroup><col style="width:92px"><col><col style="width:44px"></colgroup><thead><tr><th>Comboio</th><th>Percurso · estado</th><th>Atr.</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+$('p-trains').onclick = e => { const r = e.target.closest('tr[data-t]'); if (!r) return; const t = SIM.trains.find(x => x.id === +r.dataset.t); if (t) { selectTrain(t); centerOn(t); } };
+
+function selectTrain(t) { UI.selTrain = t; showTab('train'); }
+function centerOn(t) { const h = headInfo(t); VIEW.x = h.x; VIEW.y = h.y; if (VIEW.z < 0.9) VIEW.z = 1.1; }
+function renderTrainCard() {
+  const t = UI.selTrain;
+  if (!t || !SIM.trains.includes(t)) { $('p-train').innerHTML = '<p class="sec">Nenhum comboio selecionado</p><p style="color:var(--ink-dim)">Clique no descritor de um comboio no quadro ou na lista de comboios.</p>'; return; }
+  const c = CAT[t.cat], d = liveDelay(t);
+  const sig = t.nextSig >= 0 ? S(t.nextSig) : null;
+  const canAuth = sig && sig.aspect === 0 && t.nextSigDist < 350 && t.authSig !== sig.id;
+  const rows = t.plan.map((p, i) => {
+    const L = NET.loc[p.loc], cur = i === (t.state === 'dwell' ? t.pi : t.pi);
+    const real = p.aarr ?? p.apass ?? (i === 0 ? p.adep : null), dep = p.adep;
+    const dd = p.adep != null ? p.adep - p.dep : real != null ? real - p.t : null;
+    const label = (p.stop ? esc(L.name) : `<i style="color:var(--ink-faint)">${esc(L.name)}</i>`) + (p.rev ? ' <span class="late">⇄ inversão</span>' : '');
+    return `<tr class="${i < t.pi ? '' : 'future'} ${cur ? 'sel' : ''}"><td>${label}${p.missed ? ' <span class="vlate">✕ paragem falhada</span>' : ''}</td>
+      <td class="t">${i === 0 ? '' : hhmm(p.t)}</td><td class="t">${p.stop && i < t.plan.length - 1 ? hhmm(p.dep) : p.stop ? '' : '|'}</td>
+      <td class="t">${real != null ? hhmm(real) : ''}${dep != null && p.stop ? '/' + hhmm(dep) : ''}</td><td class="t ${dd != null ? delayCls(dd) : ''}">${dd != null ? fmtDelay(dd) : ''}</td></tr>`;
+  }).join('');
+  $('p-train').innerHTML = `<div class="card"><h3><span class="tag ${c.cls}">${t.cat}</span>${t.num}</h3>
+    <div style="color:var(--ink-dim)">${esc(c.label)} · ${t.svc.title ? esc(t.svc.title) : `${esc(t.svc.from)} → ${esc(t.svc.to)}`}</div>
+    <div class="kv"><span>Estado</span><span>${stateText(t)}</span><span>Velocidade</span><span>${Math.round(t.v * 3.6)} km/h (máx ${Math.round(t.vmax * 3.6)})</span>
+    <span>Composição</span><span>${t.len} m</span><span>Posição</span><span>km ${trainKm(t).toFixed(2)}</span>
+    <span>Próximo sinal</span><span>${sig ? `${esc(sig.name)} · ${['fechado', 'aviso', 'via livre'][sig.aspect]} · ${Math.round(t.nextSigDist)} m` : '—'}</span>
+    <span>Atraso</span><span class="${delayCls(d)}">${fmtDelay(d)} min</span>
+    ${t.svc.next ? `<span>Rotação</span><span>forma o ${esc(t.svc.next)}</span>` : ''}
+    ${t.revAt ? `<span>Manobra</span><span>${t.manWait ? 'aguarda linha adjacente livre' : 'inversão até ' + hhmm(t.revAt)}</span>` : ''}
+    ${t.rescued ? '<span>Socorro</span><span>acoplado · máx. 50 km/h</span>' : ''}</div>
+    <div class="btns"><button class="btn" data-act="center">Centrar no quadro</button>
+    ${canAuth ? `<button class="btn warn" data-act="auth">Autorizar passagem do ${esc(sig.name)}</button>` : ''}
+    ${t.severe && !t.rescueReq ? '<button class="btn warn" data-act="rescue">Pedir Socorro de Contumil</button>' : ''}
+    ${t.severe && !shuntingTo(t) && findAssistant(t) ? `<button class="btn warn" data-act="assist">Socorro pelo ${esc(findAssistant(t).x.num)}</button>` : ''}
+    ${t.state === 'swait' ? '<button class="btn warn" data-act="approach">Autorizar marcha de socorro</button>' : ''}</div></div>
+    <p class="sec">Horário</p><table><thead><tr><th>Local</th><th>Cheg.</th><th>Part.</th><th>Real</th><th>Δ</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+$('p-train').onclick = e => {
+  const b = e.target.closest('[data-act]'); const t = UI.selTrain; if (!b || !t) return;
+  if (b.dataset.act === 'center') centerOn(t);
+  if (b.dataset.act === 'auth') authorize(t, S(t.nextSig));
+  if (b.dataset.act === 'rescue') { requestRescue(t); refreshPanel(true); }
+  if (b.dataset.act === 'assist') { assist(t); refreshPanel(true); }
+  if (b.dataset.act === 'approach') { tryApproach(t, true); refreshPanel(true); }
+};
+function authorize(t, s) {
+  t.authSig = s.id;
+  log('info', `Autorização ao ${t.num} para ultrapassar o ${s.name} fechado, em marcha à vista (máx. 30 km/h)`, t);
+  refreshPanel(true);
+}
+
+// ── log ─────────────────────────────────────────────────────────────────────
+const LOGF = [['all', 'Tudo'], ['alarm', 'Alarmes'], ['radio', 'Rádio solo-comboio'], ['warn', 'Avisos']];
+$('logf').innerHTML = LOGF.map(([k, l]) => `<button class="chip ${k === 'all' ? 'on' : ''}" data-f="${k}">${l}</button>`).join('');
+$('logf').onclick = e => { const b = e.target.closest('[data-f]'); if (!b) return; logFilter = b.dataset.f; for (const c of $('logf').children) c.classList.toggle('on', c === b); renderLog(); };
+function renderLog() {
+  $('log').innerHTML = SIM.log.filter(l => logFilter === 'all' || l.sev === logFilter).slice(0, 250)
+    .map(l => `<li class="${l.sev}"><time>${hhmm(l.t)}</time><span>${esc(l.msg)}</span></li>`).join('');
+}
+let toastTimer = 0;
+function onLog(l) {
+  if (tab === 'log') renderLog();
+  if (l.sev === 'alarm' || l.sev === 'radio') {
+    if (tab !== 'log' && l.sev === 'alarm') { unseenAlarms++; $('alarms').textContent = unseenAlarms; $('alarms').hidden = false; }
+    const el = $('toast'); el.textContent = `${hhmm(l.t)}  ${l.msg}`; el.className = 'toast' + (l.sev === 'radio' ? ' radio' : ''); el.style.display = 'block';
+    toastTimer = performance.now() + 7000;
+  }
+}
+function onTrainGone(t) { if (UI.selTrain === t) UI.selTrain = null; }
+function onTrainRenumber() { }
+
+// ── time–distance graph (gráfico de circulação) ─────────────────────────────
+const GCOR = {
+  MINHO: ['SB_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_TUI'],
+  BRAGA: ['SB_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_BRG'],
+  GUIM: ['SB_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_GMR'],
+  DOURO: ['SB_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_CAI', 'CAI_MCN', 'MCN_POC'],
+};
+$('gcor').onchange = () => drawGraph();
+function drawGraph() {
+  const g = $('graph'), r = g.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (!r.width) return;
+  g.width = r.width * dpr; g.height = r.height * dpr;
+  const c = g.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = r.width, H = r.height, L = 96, R = 8, Tp = 18, B = 22;
+  c.fillStyle = '#04070c'; c.fillRect(0, 0, W, H);
+  const cor = corridor(GCOR[$('gcor').value]), inCor = new Set(cor.map(x => x.loc));
+  const kms = cor.map(x => NET.loc[x.loc].km), k0 = Math.min(...kms), k1 = Math.max(...kms);
+  const t0 = SIM.t - 4500, t1 = SIM.t + 2700;
+  const X = t => L + (t - t0) / (t1 - t0) * (W - L - R), Y = k => Tp + (k - k0) / (k1 - k0) * (H - Tp - B);
+  c.font = "500 10px 'Barlow', sans-serif"; c.textBaseline = 'middle';
+  for (const x of cor) {
+    const Lc = NET.loc[x.loc]; if (Lc.type === 'halt') continue;
+    const y = Y(Lc.km); c.strokeStyle = '#17222e'; c.lineWidth = 1; c.beginPath(); c.moveTo(L, y); c.lineTo(W - R, y); c.stroke();
+    c.fillStyle = '#8394a6'; c.textAlign = 'right'; c.fillText(Lc.name.replace('Porto ', '').slice(0, 17), L - 5, y);
+  }
+  c.textAlign = 'center'; c.fillStyle = '#56677a'; c.font = "500 10px 'IBM Plex Mono', monospace";
+  const step = W > 520 ? 900 : 1800;
+  for (let t = Math.ceil(t0 / step) * step; t < t1; t += step) { const x = X(t); c.strokeStyle = '#121b26'; c.beginPath(); c.moveTo(x, Tp); c.lineTo(x, H - B); c.stroke(); c.fillText(hhmm(t), x, H - 9); }
+  c.save(); c.beginPath(); c.rect(L, Tp - 4, W - L - R, H - Tp - B + 8); c.clip();
+  for (const s of SIM.svc) {
+    const pts = s.plan.filter(p => inCor.has(p.loc)); if (pts.length < 2) continue;
+    if (pts[pts.length - 1].t < t0 || pts[0].t > t1) continue;
+    const col = COL[CAT[s.cat].cls];
+    c.strokeStyle = col; c.globalAlpha = 0.45; c.lineWidth = 1; c.setLineDash([4, 3]); c.beginPath();
+    pts.forEach((p, i) => { const y = Y(NET.loc[p.loc].km); if (i === 0) c.moveTo(X(p.dep), y); else { c.lineTo(X(p.t), y); if (p.dep !== p.t) c.lineTo(X(p.dep), y); } });
+    c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+    // actual
+    const act = [];
+    for (const p of pts) { const y = Y(NET.loc[p.loc].km); const a = p.aarr ?? p.apass; if (a != null) act.push([X(a), y]); if (p.adep != null) act.push([X(p.adep), y]); }
+    const t = s.train;
+    if (t && SIM.trains.includes(t) && t.svc === s) {
+      const tg = t.plan[t.pi];
+      if (act.length && (t.state !== 'run' || (tg && inCor.has(tg.loc)))) act.push([X(SIM.t), t.state === 'run' ? Y(trainKm(t)) : act[act.length - 1][1]]);
+    }
+    if (act.length > 1) { c.strokeStyle = col; c.lineWidth = 2.2; c.beginPath(); act.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke(); }
+    const lp = act.length ? act[act.length - 1] : null;
+    if (lp && act.length > 1) { c.fillStyle = col; c.font = "600 9.5px 'IBM Plex Mono', monospace"; c.textAlign = 'left'; c.fillText(s.num, lp[0] + 3, lp[1] - 6); }
+  }
+  c.restore();
+  c.strokeStyle = '#ffc93a'; c.lineWidth = 1; c.beginPath(); c.moveTo(X(SIM.t), Tp - 6); c.lineTo(X(SIM.t), H - B); c.stroke();
+}
+
+// ── help ────────────────────────────────────────────────────────────────────
+$('p-help').innerHTML = `
+<p class="sec">Estabelecer itinerários</p>
+<p><b>Clique num sinal principal</b> (com haste) para o escolher como sinal de entrada. Os destinos possíveis ficam com um anel ciano. <b>Clique no sinal de destino</b> ou na linha de destino para estabelecer o itinerário. As agulhas movem-se, a via fica verde e o sinal abre.</p>
+<p>Os itinerários libertam-se por troços à medida que o comboio avança. <b>Clique direito</b> num sinal para anular o itinerário (com temporização se houver comboio em aproximação), torná-lo permanente, ou autorizar a passagem de um comboio retido.</p>
+<p class="sec">Via única</p>
+<p>Entre Nine e Valença, Caíde e Régua, Lousado e Guimarães e na linha de Leixões, só um comboio ocupa cada cantão entre estações. Planeie os <b>cruzamentos</b>: deixe um comboio no desvio da estação de cruzamento antes de dar partida ao outro. No Minho cruza-se em Tamel, Barcelos, Midões, Barroselas, Viana, Âncora, Caminha e Cerveira. Darque, Godim e S. Martinho do Campo só têm uma linha de passagem: não servem para cruzar. Atenção ao comprimento dos desvios: um mercadorias de 450 m não cabe em Barroselas (420 m) nem em Âncora (380 m).</p>
+<p class="sec">Terminais de mercadorias</p>
+<p>Cimpor, Leandro, Tadim, S. Martinho do Campo, Darque e Godim têm uma linha de terminal (<b>T</b>) com acesso do lado do Porto. O mercadorias de Devesas ou de Leixões entra na T, descarrega e regressa invertendo a marcha. A T não serve para cruzamentos.</p>
+<p class="sec">Comboios especiais e manobras</p>
+<p>Os especiais (<b>ESP</b>, lilás) são rebocados por locomotiva. Onde o horário marca <b>⇄ inversão</b> (por exemplo Campanhã, no Comboio do Vinho Valença → Régua), receba-os numa linha que tenha ao lado <b>outra linha livre</b>: a locomotiva contorna a composição por ela durante 10 min e essa linha fica reservada (azul claro). Sem linha adjacente livre, a manobra não começa.</p>
+<p class="sec">Socorro</p>
+<p>Uma avaria grave ou um acidente deixa o comboio <b>sem marcha</b>. Abra o horário dele e use <b>Pedir Socorro de Contumil</b>: a unidade diesel sai da linha S de Contumil e vai para a estação mais próxima do comboio. Estabeleça-lhe os itinerários como a qualquer comboio. Quando lá chegar, use <b>Autorizar marcha de socorro</b>: as agulhas são postas e o Socorro avança à vista, mesmo em contravia, até acoplar. O comboio é rebocado a 50 km/h até à estação seguinte, onde termina. Nas mesas em ARS tudo isto é automático. Não mande outros comboios para o cantão do comboio imobilizado.</p>
+<p class="sec">Rotações</p>
+<p>Um comboio que termina numa estação e faz depois outro serviço a partir dela fica <b>estacionado</b> na linha onde chegou até à partida seguinte. Escolha bem essa linha: ocupa-a durante toda a espera.</p>
+<p class="sec">Avarias</p>
+<p><b>Falsa ocupação de CDV</b>: o sinal em rear fica fechado. Abra o horário do comboio retido e use <b>Autorizar passagem</b>; segue em marcha à vista a 30 km/h. <b>Agulha sem controlo</b>: só pode usar itinerários na posição em que ficou presa.</p>
+<p class="sec">Comboios</p>
+<p>O maquinista recusa avançar se o itinerário não serve o seu destino e avisa por rádio. Comboios de passageiros têm de ser recebidos numa linha com cais (as linhas <b>L</b> são desvios sem cais).</p>
+<p class="sec">Atalhos</p>
+<p><kbd>Espaço</kbd> pausa · <kbd>1</kbd>–<kbd>6</kbd> velocidade · <kbd>Esc</kbd> cancela seleção · roda do rato: zoom · arrastar: deslocar</p>
+<p class="sec">Legenda</p>
+<div class="legend">
+<i style="background:${COL.idle}"></i><span>Via livre, sem itinerário</span>
+<i style="background:${COL.route}"></i><span>Itinerário estabelecido e encravado</span>
+<i style="background:${COL.occ}"></i><span>Circuito de via ocupado</span>
+<i style="background:${COL.fail}"></i><span>Circuito de via avariado (falsa ocupação)</span>
+<i class="dot" style="background:${COL.grn}"></i><span>Sinal: via livre</span>
+<i class="dot" style="background:${COL.yel}"></i><span>Sinal: aviso (próximo sinal fechado)</span>
+<i class="dot" style="background:${COL.red}"></i><span>Sinal: paragem</span>
+<i style="background:${COL.urb}"></i><span>Urbano · CP Porto</span>
+<i style="background:${COL.reg}"></i><span>Regional / InterRegional</span>
+<i style="background:${COL.ld}"></i><span>Alfa Pendular / Intercidades</span>
+<i style="background:${COL.int}"></i><span>Celta (internacional)</span>
+<i style="background:${COL.merc}"></i><span>Mercadorias</span>
+<i style="background:${COL.esp}"></i><span>Comboio especial</span>
+<i style="background:${COL.soc}"></i><span>Socorro (Contumil)</span>
+<i style="background:${COL.shunt}"></i><span>Via reservada para manobra ou marcha de socorro</span>
+</div>`;
+
+// ── canvas input ────────────────────────────────────────────────────────────
+const ptrs = new Map(); let drag = null, pinch = null;
+function updateHint() {
+  let h;
+  if (UI.entry !== null) h = `Sinal de entrada <b>${esc(S(UI.entry).name)}</b> — clique no destino (anel ciano) · <kbd>Esc</kbd> cancela`;
+  else h = `Clique num <b>sinal principal</b> para iniciar um itinerário · clique numa <b>agulha</b> para a manobrar · clique direito para mais ações`;
+  $('hint').innerHTML = h;
+}
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.offsetX, e.offsetY]);
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: VIEW.z }; drag = null; }
+  else if (e.button === 0) drag = { x: e.offsetX, y: e.offsetY, vx: VIEW.x, vy: VIEW.y, moved: false };
+});
+cv.addEventListener('pointermove', e => {
+  UI.mouse = [e.offsetX, e.offsetY];
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, [e.offsetX, e.offsetY]);
+  if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()]; VIEW.z = Math.min(4, Math.max(0.12, pinch.z * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d)); return; }
+  if (drag) {
+    const dx = e.offsetX - drag.x, dy = e.offsetY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
+    if (drag.moved) { VIEW.x = drag.vx - dx / VIEW.z; VIEW.y = drag.vy - dy / VIEW.z; }
+  }
+  // route preview
+  UI.hoverRoute = null;
+  if (UI.entry !== null) { const m = matchRoutes(e.offsetX, e.offsetY); if (m.length) UI.hoverRoute = m[0]; }
+  cv.style.cursor = drag && drag.moved ? 'grabbing' : (hitSignal(e.offsetX, e.offsetY, true) || hitTrain(e.offsetX, e.offsetY) || hitPoint(e.offsetX, e.offsetY)) ? 'pointer' : 'crosshair';
+});
+cv.addEventListener('pointerup', e => {
+  ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
+  if (drag && !drag.moved && e.button === 0) onClick(e.offsetX, e.offsetY);
+  drag = null;
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const [wx, wy] = s2w(e.offsetX, e.offsetY);
+  VIEW.z = Math.min(4, Math.max(0.12, VIEW.z * Math.exp(-e.deltaY * 0.0015)));
+  VIEW.x = wx - (e.offsetX - VIEW.W / 2) / VIEW.z; VIEW.y = wy - (e.offsetY - VIEW.H / 2) / VIEW.z;
+}, { passive: false });
+cv.addEventListener('contextmenu', e => { e.preventDefault(); openCtx(e.offsetX, e.offsetY); });
+$('mini').addEventListener('click', e => { const m = mini._map; if (!m) return; const r = mini.getBoundingClientRect(), d = VIEW.dpr; VIEW.x = m.x0 + ((e.clientX - r.left) * d - m.ox) / m.k; VIEW.y = m.y0 + ((e.clientY - r.top) * d - m.oy) / m.k; });
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,select')) return;
+  if (e.key === 'Escape') { UI.entry = null; UI.hoverRoute = null; hideCtx(); updateHint(); }
+  else if (e.key === ' ') { e.preventDefault(); setSpeed(SIM.paused ? SIM.speed : 0); }
+  else if (/^[1-6]$/.test(e.key)) setSpeed(SPEEDS[+e.key]);
+});
+
+function matchRoutes(sx, sy) {
+  if (UI.entry === null) return [];
+  const routes = S(UI.entry).routes.map(id => ROUTES[id]);
+  let m = [];
+  const sig = hitSignal(sx, sy); if (sig) m = routes.filter(r => r.exit === sig.id);
+  if (!m.length) { const nid = hitExitNode(sx, sy); if (nid !== null) m = routes.filter(r => r.exit < 0 && r.endNode === nid); }
+  if (!m.length) { const ed = hitEdge(sx, sy); if (ed) m = routes.filter(r => r.last.e === ed.id); }
+  return m.sort((a, b) => (canSet(a) ? 1 : 0) - (canSet(b) ? 1 : 0) || a.div - b.div);
+}
+function onClick(sx, sy) {
+  hideCtx();
+  if (UI.entry !== null) {
+    const m = matchRoutes(sx, sy);
+    if (m.length) { setRoute(m[0]); UI.entry = null; UI.hoverRoute = null; updateHint(); return; }
+    const sig = hitSignal(sx, sy, true);
+    if (sig && sig.id !== UI.entry && sig.routes.length) { UI.entry = sig.id; updateHint(); return; }
+    UI.entry = null; UI.hoverRoute = null; updateHint(); return;
+  }
+  const sig = hitSignal(sx, sy, true);
+  if (sig && sig.routes.length) { UI.entry = sig.id; updateHint(); return; }
+  const t = hitTrain(sx, sy); if (t) { selectTrain(t); return; }
+  const p = hitPoint(sx, sy); if (p) { movePoint(p); return; }
+}
+function hideCtx() { $('ctx').style.display = 'none'; }
+function openCtx(sx, sy) {
+  const items = []; let title = '';
+  const sig = hitSignal(sx, sy), t = hitTrain(sx, sy), p = !sig && !t ? hitPoint(sx, sy) : null;
+  if (sig) {
+    title = `Sinal ${sig.name}${sig.kind === 'auto' ? ' (automático)' : ''}`;
+    if (sig.kind === 'main') {
+      items.push(['Estabelecer itinerário a partir daqui', () => { UI.entry = sig.id; updateHint(); }, !sig.routes.length]);
+      items.push(['Anular itinerário', () => cancelRoute(sig), !sig.route]);
+      items.push([sig.fleet ? 'Desligar itinerário permanente' : 'Itinerário permanente (fleeting)', () => { sig.fleet = !sig.fleet; }, !sig.route && !sig.fleet]);
+    }
+    for (const tr of SIM.trains.filter(x => x.nextSig === sig.id && x.nextSigDist < 350 && sig.aspect === 0 && x.authSig !== sig.id))
+      items.push([`Autorizar ${tr.num} a ultrapassar fechado`, () => authorize(tr, sig)]);
+  } else if (t) {
+    title = `Comboio ${t.num}`;
+    items.push(['Ver horário', () => selectTrain(t)]);
+    const s = t.nextSig >= 0 ? S(t.nextSig) : null;
+    items.push([s ? `Autorizar passagem do ${s.name}` : 'Autorizar passagem de sinal', () => authorize(t, s), !(s && s.aspect === 0 && t.nextSigDist < 350 && t.authSig !== s.id)]);
+    if (t.severe) items.push(['Pedir Socorro de Contumil', () => requestRescue(t), !!t.rescueReq]);
+    if (t.severe) items.push(['Socorro pelo comboio seguinte', () => assist(t), shuntingTo(t)]);
+    if (t.cat === 'SOC') items.push(['Autorizar marcha de socorro', () => tryApproach(t, true), t.state !== 'swait']);
+  } else if (p) {
+    title = `Agulha ${p.pname} — ${p.pos === 'N' ? 'normal' : 'inversa'}${p.lock ? ' · encravada' : ''}${p.fail ? ' · AVARIADA' : ''}`;
+    items.push([`Manobrar para ${p.pos === 'N' ? 'inversa' : 'normal'}`, () => movePoint(p), !!(p.lock || p.fail)]);
+  } else return;
+  const el = $('ctx');
+  el.innerHTML = `<header>${esc(title)}</header>` + items.map((it, i) => `<button data-i="${i}" ${it[2] ? 'disabled' : ''}>${esc(it[0])}</button>`).join('');
+  el.onclick = e => { const b = e.target.closest('[data-i]'); if (!b || b.disabled) return; items[+b.dataset.i][1](); hideCtx(); refreshPanel(true); };
+  el.style.display = 'block';
+  el.style.left = Math.min(sx, VIEW.W - 250) + 'px'; el.style.top = Math.min(sy, VIEW.H - el.offsetHeight - 8) + 'px';
+}
+
+// ── start / end ─────────────────────────────────────────────────────────────
+const DESKINFO = {
+  1: 'São Bento, Campanhã, Contumil (base do Socorro), Ermesinde, Leixões. Nó urbano denso, terminais e cruzamento de fluxos.',
+  2: 'Cimpor, Leandro, Trofa → Nine, Ramal de Braga (terminal de Tadim) e Linha de Guimarães (via única, terminal de S. Martinho do Campo).',
+  3: 'Nine → Valença, via única. Cruzamentos em Tamel e Midões, terminal de Darque, Celta e mercadorias de/para Espanha.',
+  4: 'Paredes → Régua. Via dupla até Caíde, depois via única com material diesel e o terminal de Godim.',
+};
+$('scnpick').innerHTML = Object.values(SCN).map(c =>
+  `<label><input type="radio" name="scn" id="scn-${c.id}" value="${c.id}" ${c.id === SCNSEL ? 'checked' : ''}><em>${esc(c.day)}</em><b>${esc(c.label)}</b><time>${hhmm(c.t0)} – ${hhmm(c.t1)}</time><small>${esc(c.note)}</small></label>`).join('');
+function showScn() { const c = SCN[SCNSEL]; $('startEyebrow').textContent = `${c.day} · ${c.label} · ${hhmm(c.t0)} – ${hhmm(c.t1)}`; $('clock').textContent = hhmm(c.t0, true); SIM.t = c.t0; }
+$('scnpick').onchange = e => { if (e.target.name === 'scn') { SCNSEL = e.target.value; showScn(); } };
+showScn();
+$('deskpick').innerHTML = Object.entries(SIM.desks).map(([k, d]) =>
+  `<label><input type="checkbox" id="dk${k}" value="${k}" ${k === '3' ? 'checked' : ''}><b>Mesa ${k} · ${esc(d.name)}</b><small>${DESKINFO[k]}</small></label>`).join('');
+$('go').onclick = () => {
+  const c = SCN[SCNSEL];
+  SIM.scn = c; SIM.t = c.t0; SIM.tEnd = c.t1; SIM.nextFault = c.t0 + rnd(30, 45) * 60;
+  buildTimetable(c); socorroHome();
+  for (const k in SIM.desks) SIM.desks[k].auto = !$('dk' + k).checked;
+  SIM.faults = $('optFaults').checked;
+  $('start').hidden = true; renderDesks();
+  const manual = Object.keys(SIM.desks).filter(k => !SIM.desks[k].auto);
+  if (manual.length === 1) fitView(...deskBox(+manual[0])); else fitView(...VIEW.bounds);
+  log('info', `${c.day}, ${c.label.toLowerCase()}. Turno assumido. Mesas em comando manual: ${manual.length ? manual.map(k => 'M' + k).join(', ') : 'nenhuma (observação)'}.`);
+  setSpeed(5);
+};
+function onShiftEnd() {
+  const st = SIM.stats, pct = st.done ? Math.round(100 * st.punctual / st.done) : 100;
+  const avg = st.done ? (st.delaySum / st.done / 60).toFixed(1) : '0.0';
+  const cells = [['Pontualidade', pct + '%'], ['Serviços concluídos', st.done], ['Atraso médio', avg + ' min'], ['SPAD', st.spad], ['Talonamentos', st.runthrough],
+    ['Paragens falhadas', st.missed], ['Itinerários errados', st.wrong], ['Incidentes', st.incidents], ['Em circulação', SIM.trains.filter(t => t.state !== 'term' && t.state !== 'base').length]];
+  $('endEyebrow').textContent = `Fim de turno · ${SIM.scn.day} · ${hhmm(SIM.tEnd)}`;
+  $('report').innerHTML = cells.map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('');
+  const score = pct - st.spad * 15 - st.runthrough * 10 - st.missed * 3 - st.wrong * 2;
+  $('endTitle').textContent = score >= 90 ? 'Turno exemplar' : score >= 75 ? 'Turno sólido' : score >= 55 ? 'Turno difícil' : 'Turno para esquecer';
+  $('endNote').textContent = `Índice do turno: ${Math.max(0, score)} / 100. Pontualidade conta comboios até 3 min (urbanos) ou 5 min (restantes) no destino ou à saída da área.`;
+  $('end').hidden = false;
+}
+$('again').onclick = () => location.reload();
+$('keep').onclick = () => { $('end').hidden = true; SIM.tEnd = 24 * 3600; };
+
+// ── main loop ───────────────────────────────────────────────────────────────
+let lastFrame = performance.now(), lastPanel = 0, lastBlink = 0;
+function frame(now) {
+  const rdt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  if (!SIM.paused) {
+    let simDt = rdt * SIM.speed; const step = 0.25;
+    while (simDt > 0) { const d = Math.min(step, simDt); simStep(d); simDt -= d; }
+  }
+  if (now - lastBlink > 450) { UI.blink = !UI.blink; lastBlink = now; }
+  $('clock').textContent = hhmm(SIM.t, true);
+  draw(); drawMini();
+  if (now - lastPanel > 700) { lastPanel = now; refreshPanel(false); renderKpis(); }
+  if (toastTimer && now > toastTimer) { $('toast').style.display = 'none'; toastTimer = 0; }
+  requestAnimationFrame(frame);
+}
+
+buildHeader();
+setSpeed(0);
+updateHint();
+fitView(...VIEW.bounds);
+renderKpis(); renderTrainList();
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>
