@@ -326,6 +326,16 @@ function station(sp) {
   for (const side of ['W', 'E']) {
     const s = side === 'W' ? -1 : 1, xEdge = side === 'W' ? xw : xe;
     for (const c of (st[side] || [])) st.ports[side].push(buildConn(st, s, xEdge, c));
+    // a road end that gets points from two sides: move the points 20 m out, clear of a train standing at the platform
+    st.tracks.forEach(t => {
+      const end = t[side]; if (end.edges.length !== 3) return;
+      const q = mkNode(end.x + s * 5, end.y, st.km);
+      for (const id of end.edges.filter(id => id !== t.e.id)) {
+        const e = NET.edges[id]; if (e.a === end.id) e.a = q.id; else e.b = q.id; q.edges.push(id);
+      }
+      end.edges = [t.e.id];
+      q.forceC = mkEdge(end, q, 20, { v: st.vt, st: st.id }).id; // the road side is the common leg of this point
+    });
     st.tracks.forEach(t => {
       const end = t[side];
       if (end.edges.length === 1) end.type = 'buffer';
@@ -359,7 +369,7 @@ function track(nA, nB, via, kmA, kmB, L, cuts, o) {
     const pts = [[nodes[i].x, nodes[i].y]];
     for (let k = 1; k < path.length - 1; k++) { const f = cum[k] / tot; if (f > fr[i] && f < fr[i + 1]) pts.push(path[k]); }
     pts.push([nodes[i + 1].x, nodes[i + 1].y]);
-    edges.push(mkEdge(nodes[i], nodes[i + 1], L * (fr[i + 1] - fr[i]), { v: o.v, pts: pts.length > 2 ? pts : null, line: o.line }));
+    edges.push(mkEdge(nodes[i], nodes[i + 1], L * (fr[i + 1] - fr[i]), { v: o.v, pts: pts.length > 2 ? pts : null, line: o.line, under: !!o.under }));
   }
   return { nodes, edges, fr, path, cum, tot };
 }
@@ -452,6 +462,7 @@ function finalizePoints() {
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
     let ci = 0, best = 9;
     for (let i = 0; i < 3; i++) { const s = vs.reduce((acc, v, j) => j === i ? acc : acc + dot(vs[i], v), 0); if (s < best) { best = s; ci = i; } }
+    if (n.forceC != null) ci = n.edges.indexOf(n.forceC);
     const o = [0, 1, 2].filter(i => i !== ci);
     const ni = dot(vs[ci], vs[o[0]]) < dot(vs[ci], vs[o[1]]) ? o[0] : o[1], ri = o[0] === ni ? o[1] : o[0];
     Object.assign(n, { type: 'point', c: es[ci].id, nrm: es[ni].id, rev: es[ri].id, pos: 'N', moving: 0, fail: 0, pname: '' });
@@ -472,136 +483,154 @@ function finalizePoints() {
 // ═════════════════════════════════════════════════════════════════════════════
 function buildNetwork() {
   const P = (n, dy, len, p, o) => Object.assign({ n, dy, len, p }, o || {});
+  const XS = 340, XD = 900; // eastward shift of the Minho/Braga/Guimarães and Douro groups
   // Porto
   const SB = station({ id: 'SB', name: 'Porto São Bento', short: 'PSB', km: 0, x: 150, y: 700, w: 150, desk: 1, vt: 40,
     tr: [P('1', -32, 230, '1'), P('2', -16, 230, '2'), P('3', 0, 230, '3'), P('4', 16, 230, '4'), P('5', 32, 230, '5')],
     E: [{ t: 'D', top: [1, 0], bot: [2, 3, 4] }] });
-  const CMP = station({ id: 'CMP', dirRoads: { E: ['1', '2', '4'], W: ['3', '5', '6'] }, name: 'Porto Campanhã', short: 'CPM', km: 2.6, x: 720, y: 700, w: 200, desk: 1, vt: 60,
+  // Campanhã: roads 5 and 6 reach Contumil only through the underpass (passagem inferior) beneath the main lines
+  const CMP = station({ id: 'CMP', dirRoads: { E: ['1', '2', '4', '5', '6'], W: ['3', '4', '5', '6'] }, name: 'Porto Campanhã', short: 'CPM', km: 2.6, x: 720, y: 700, w: 200, desk: 1, vt: 60,
     tr: [P('1', -40, 300, '1'), P('2', -24, 300, '2'), P('3', -8, 300, '3'), P('4', 8, 300, '4'), P('5', 24, 300, '5'), P('6', 40, 300, '6')],
     W: [{ t: 'D', top: [1, 0], bot: [2] }, { t: 'D', top: [3], bot: [4, 5] }],
-    E: [{ t: 'D', top: [2, 1, 0], bot: [3, 4, 5] }] });
-  // Contumil: track S is the Socorro's stabling road (depot), connected at both ends
-  const CTM = station({ id: 'CTM', dirRoads: { E: ['1', '2'], W: ['1', '3', '4'] }, name: 'Contumil', short: 'CTM', km: 4.6, x: 1140, y: 700, w: 140, desk: 1, vt: 80,
-    tr: [P('1', -24, 350, '1'), P('2', -8, 350, '2', { main: 1 }), P('3', 8, 350, '3', { main: 1 }), P('4', 24, 350, '4'), P('S', 40, 200, null, { depot: 1 })],
-    W: [{ t: 'D', top: [1, 0], bot: [2, 3, 4] }],
-    E: [{ t: 'S', tr: [0] }, { t: 'D', top: [1], bot: [2, 3, 4] }] });
-  const LXS = station({ id: 'LXS', name: 'Leixões (terminal)', short: 'LXS', km: 13, x: 860, y: 484, w: 180, desk: 1, vt: 40,
+    E: [{ t: 'D', top: [2, 1, 0], bot: [3] }, { t: 'S', tr: [4, 5] }] });
+  // Contumil: L1/L2 serve Leixões only and lead west into the single line to Campanhã (L1 also has points onto
+  // the main lines); road 1 reaches both Ermesinde and Leixões; road S is the Socorro's stabling road
+  const CTM = station({ id: 'CTM', dirRoads: { E: ['1', '2', 'L1', 'L2'], W: ['1', '3', '4', '5', 'L1', 'L2'] }, name: 'Contumil', short: 'CTM', km: 4.6, x: 1260, y: 700, w: 140, desk: 1, vt: 80,
+    tr: [P('L2', -56, 400, 'L2'), P('L1', -40, 400, 'L1'), P('1', -24, 350, '1'), P('2', -8, 350, '2', { main: 1 }), P('3', 8, 350, '3', { main: 1 }), P('4', 24, 350, '4'),
+      P('5', 40, 350, '5'), P('S', 56, 200, null, { depot: 1 })],
+    W: [{ t: 'D', top: [3, 2, 1], bot: [4, 5, 6, 7] }, { t: 'S', tr: [0, 1] }],
+    E: [{ t: 'S', tr: [0, 1, 2] }, { t: 'D', top: [3, 2], bot: [4, 5, 6, 7] }] });
+  const LXS = station({ id: 'LXS', name: 'Leixões (terminal)', short: 'LXS', km: 18.9, x: 680, y: 484, w: 180, desk: 1, vt: 40,
     tr: [P('1', -16, 700), P('2', 0, 700), P('3', 16, 700)], E: [{ t: 'S', tr: [1, 0, 2] }] });
-  const SGM = station({ id: 'SGM', name: 'São Gemil', short: 'SGM', km: 7.5, x: 1255, y: 484, w: 110, desk: 1, vt: 50,
-    tr: [P('1', -8, 600), P('2', 8, 600)], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0] }, { t: 'S', tr: [1] }] });
+  const LCB = station({ id: 'LCB', name: 'Leça do Balio', short: 'LCB', km: 14.3, x: 1000, y: 484, w: 110, desk: 1, vt: 60,
+    tr: [P('1', -16, 400, '1'), P('2', 0, 400, '2', { main: 1 }), P('3', 16, 400, '3')], W: [{ t: 'S', tr: [1, 0, 2] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
+  const SGM = station({ id: 'SGM', name: 'São Gemil', short: 'SGM', km: 7.5, x: 1340, y: 484, w: 110, desk: 1, vt: 50,
+    tr: [P('1', -8, 600, '1'), P('2', 8, 600, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }, { t: 'S', tr: [1, 0] }] });
   const ERM = station({ id: 'ERM', dirRoads: { E: ['1', '3', 'L'], W: ['2', '4', '5', 'L'] }, name: 'Ermesinde', short: 'ERM', km: 11.0, x: 1900, y: 700, w: 180, desk: 1, vt: 80,
     tr: [P('L', -40, 650), P('1', -24, 450, '1'), P('2', -8, 450, '2', { main: 1 }), P('3', 8, 450, '3', { main: 1 }), P('4', 24, 450, '4'), P('5', 40, 450, '5')],
     W: [{ t: 'S', tr: [0] }, { t: 'D', top: [2, 1], bot: [3, 4, 5] }],
     E: [{ t: 'D', top: [1, 0], bot: [2] }, { t: 'D', top: [3], bot: [4, 5] }] });
   // Minho Sul / Braga / Guimarães — goods terminals (track T, stub from the Porto side)
-  const CIM = station({ id: 'CIM', dirMain: 1, name: 'Cimpor', short: 'CIM', km: 15.6, x: 2420, y: 420, w: 70, desk: 2, vt: 140,
+  const CIM = station({ id: 'CIM', dirMain: 1, name: 'Cimpor', short: 'CIM', km: 13.2, x: 2420, y: 420, w: 70, desk: 2, vt: 140,
     tr: [P('T', -24, 650, null, { term: 1 }), P('1', -8, 300, null, { main: 1 }), P('2', 8, 300, null, { main: 1 })],
     W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1], bot: [2] }] });
-  const LEA = station({ id: 'LEA', dirMain: 1, name: 'Leandro', short: 'LEA', km: 20.4, x: 2760, y: 420, w: 110, desk: 2, vt: 140,
+  const LEA = station({ id: 'LEA', dirMain: 1, name: 'Leandro', short: 'LEA', km: 14.1, x: 2760, y: 420, w: 110, desk: 2, vt: 140,
     tr: [P('T', -24, 650, null, { term: 1 }), P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2', { main: 1 })],
     W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1], bot: [2] }] });
-  const TRF = station({ id: 'TRF', dirMain: 1, name: 'Trofa', short: 'TRF', km: 24.5, x: 3140, y: 420, desk: 2,
+  const SRM = station({ id: 'SRM', dirMain: 1, name: 'São Romão', short: 'SRM', km: 18.0, x: 3100, y: 420, w: 100, desk: 2, vt: 140,
+    tr: [P('3', -24, 400, '3'), P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2', { main: 1 })],
+    W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1, 0], bot: [2] }] });
+  const TRF = station({ id: 'TRF', dirMain: 1, name: 'Trofa', short: 'TRF', km: 25.0, x: 3140 + XS, y: 420, desk: 2,
     tr: [P('L', -24, 600), P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2', { main: 1 }), P('3', 24, 400, '3')],
     W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
-  const LSD = station({ id: 'LSD', dirMain: 1, name: 'Lousado', short: 'LSD', km: 30.6, x: 3520, y: 420, desk: 2,
+  const LSD = station({ id: 'LSD', dirMain: 1, name: 'Lousado', short: 'LSD', km: 30.6, x: 3520 + XS, y: 420, desk: 2,
     tr: [P('3', -24, 300, '3'), P('1', -8, 350, '1', { main: 1 }), P('2', 8, 350, '2', { main: 1 }), P('L', 24, 550)],
     W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'S', tr: [0] }, { t: 'D', top: [1], bot: [2, 3] }] });
-  const FML = station({ id: 'FML', dirMain: 1, name: 'Famalicão', short: 'FML', km: 36.4, x: 3900, y: 420, desk: 2,
+  const FML = station({ id: 'FML', dirMain: 1, name: 'Famalicão', short: 'FML', km: 36.4, x: 3900 + XS, y: 420, desk: 2,
     tr: [P('3', -24, 350, '3'), P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2', { main: 1 }), P('L', 24, 600)],
     W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
-  const NIN = station({ id: 'NIN', dirRoads: { E: ['1', '3', '4', '5'], W: ['2', '4', '5'] }, name: 'Nine', short: 'NIN', km: 42.0, x: 4280, y: 420, w: 170, desk: 2,
+  const NIN = station({ id: 'NIN', dirRoads: { E: ['1', '3', '4', '5'], W: ['2', '4', '5'] }, name: 'Nine', short: 'NIN', km: 42.0, x: 4280 + XS, y: 420, w: 170, desk: 2,
     tr: [P('3', -32, 350, '3'), P('1', -16, 400, '1', { main: 1 }), P('2', 0, 400, '2', { main: 1 }), P('4', 16, 400, '4'), P('5', 32, 600, '5')],
     W: [{ t: 'D', top: [1, 0], bot: [2, 3, 4] }], E: [{ t: 'D', top: [1, 0], bot: [2] }, { t: 'S', tr: [3, 4] }] });
-  const TDM = station({ id: 'TDM', dirMain: 1, name: 'Tadim', short: 'TDM', km: 48.0, x: 4900, y: 170, w: 110, desk: 2, vt: 140,
+  const TDM = station({ id: 'TDM', dirMain: 1, name: 'Tadim', short: 'TDM', km: 48.0, x: 4900 + XS, y: 170, w: 110, desk: 2, vt: 140,
     tr: [P('T', -24, 650, null, { term: 1 }), P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2', { main: 1 })],
     W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1], bot: [2] }] });
-  const BRG = station({ id: 'BRG', name: 'Braga', short: 'BRG', km: 57.0, x: 5480, y: 170, w: 150, desk: 2, vt: 60,
+  const BRG = station({ id: 'BRG', name: 'Braga', short: 'BRG', km: 57.0, x: 5480 + XS, y: 170, w: 150, desk: 2, vt: 60,
     tr: [P('1', -24, 300, '1'), P('2', -8, 300, '2'), P('3', 8, 300, '3'), P('4', 24, 300, '4')],
     W: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
-  const STS = station({ id: 'STS', name: 'Santo Tirso', short: 'STS', km: 37.4, x: 3780, y: 300, w: 120, desk: 2, vt: 80,
+  const STS = station({ id: 'STS', name: 'Santo Tirso', short: 'STS', km: 37.4, x: 3780 + XS, y: 300, w: 120, desk: 2, vt: 80,
     tr: [P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const SMC = station({ id: 'SMC', name: 'São Martinho do Campo', short: 'SMC', km: 39.3, x: 4000, y: 255, w: 90, desk: 2, vt: 90,
-    tr: [P('T', -16, 600, null, { term: 1 }), P('1', 0, 300, null, { main: 1 })], W: [{ t: 'S', tr: [1, 0] }], E: [{ t: 'S', tr: [1] }] });
-  const VZL = station({ id: 'VZL', name: 'Vizela', short: 'VZL', km: 47.0, x: 4230, y: 210, w: 120, desk: 2, vt: 80,
+  const VZL = station({ id: 'VZL', name: 'Vizela', short: 'VZL', km: 47.0, x: 4230 + XS, y: 210, w: 120, desk: 2, vt: 80,
     tr: [P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const GMR = station({ id: 'GMR', name: 'Guimarães', short: 'GMR', km: 56.0, x: 4520, y: 120, w: 130, desk: 2, vt: 40,
+  const GMR = station({ id: 'GMR', name: 'Guimarães', short: 'GMR', km: 56.0, x: 4520 + XS, y: 120, w: 130, desk: 2, vt: 40,
     tr: [P('1', -16, 260, '1'), P('2', 0, 260, '2'), P('3', 16, 260, '3')], W: [{ t: 'S', tr: [1, 0, 2] }] });
-  // Minho Norte (via única)
-  const TML = station({ id: 'TML', name: 'Tamel', short: 'TML', km: 49.8, x: 4700, y: 420, w: 100, desk: 3,
-    tr: [P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const BCL = station({ id: 'BCL', name: 'Barcelos', short: 'BCL', km: 54.0, x: 5000, y: 420, desk: 3,
+  // Minho Norte (via única): Nine – Midões – Barcelos – Tamel – Barroselas
+  const MDS = station({ id: 'MDS', name: 'Midões', short: 'MDS', km: 48.6, x: 4700 + XS, y: 420, w: 100, desk: 3,
+    tr: [P('1', -8, 420, '1', { main: 1 }), P('2', 8, 420, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const BCL = station({ id: 'BCL', name: 'Barcelos', short: 'BCL', km: 52.9, x: 5000 + XS, y: 420, desk: 3,
     tr: [P('2', -16, 380, '2'), P('1', 0, 420, '1', { main: 1 }), P('L', 16, 650)], W: [{ t: 'S', tr: [1, 0, 2] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
-  const MDS = station({ id: 'MDS', name: 'Midões', short: 'MDS', km: 58.5, x: 5300, y: 420, w: 100, desk: 3,
+  const TML = station({ id: 'TML', name: 'Tamel', short: 'TML', km: 57.8, x: 5300 + XS, y: 420, w: 100, desk: 3,
+    tr: [P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
+  const BRR = station({ id: 'BRR', name: 'Barroselas', short: 'BRR', km: 63.5, x: 5560 + XS, y: 420, w: 130, desk: 3,
     tr: [P('1', -8, 420, '1', { main: 1 }), P('2', 8, 420, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const BRR = station({ id: 'BRR', name: 'Barroselas', short: 'BRR', km: 63.5, x: 5560, y: 420, w: 130, desk: 3,
-    tr: [P('1', -8, 420, '1', { main: 1 }), P('2', 8, 420, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const DRQ = station({ id: 'DRQ', name: 'Darque', short: 'DRQ', km: 78.2, x: 5900, y: 420, w: 100, desk: 3, vt: 110,
+  const DRQ = station({ id: 'DRQ', name: 'Darque', short: 'DRQ', km: 78.2, x: 5900 + XS, y: 420, w: 100, desk: 3, vt: 110,
     tr: [P('T', -16, 650, null, { term: 1 }), P('1', 0, 400, '1', { main: 1 })], W: [{ t: 'S', tr: [1, 0] }], E: [{ t: 'S', tr: [1] }] });
-  const VCT = station({ id: 'VCT', name: 'Viana do Castelo', short: 'VCT', km: 80.5, x: 6240, y: 420, w: 170, desk: 3,
+  const VCT = station({ id: 'VCT', name: 'Viana do Castelo', short: 'VCT', km: 80.5, x: 6240 + XS, y: 420, w: 170, desk: 3,
     tr: [P('3', -24, 350, '3'), P('1', -8, 420, '1', { main: 1 }), P('2', 8, 420, '2'), P('L', 24, 700)],
     W: [{ t: 'S', tr: [1, 0, 2, 3] }], E: [{ t: 'S', tr: [1, 0, 2, 3] }] });
-  const ANC = station({ id: 'ANC', name: 'Âncora-Praia', short: 'ANC', km: 96.0, x: 6680, y: 420, w: 120, desk: 3,
+  const ANC = station({ id: 'ANC', name: 'Âncora-Praia', short: 'ANC', km: 96.0, x: 6680 + XS, y: 420, w: 120, desk: 3,
     tr: [P('1', -8, 380, '1', { main: 1 }), P('2', 8, 380, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const CMN = station({ id: 'CMN', name: 'Caminha', short: 'CMN', km: 103.5, x: 7080, y: 420, w: 140, desk: 3,
+  const CMN = station({ id: 'CMN', name: 'Caminha', short: 'CMN', km: 103.5, x: 7080 + XS, y: 420, w: 140, desk: 3,
     tr: [P('2', -16, 450, '2'), P('1', 0, 450, '1', { main: 1 }), P('L', 16, 600)], W: [{ t: 'S', tr: [1, 0, 2] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
-  const VNC = station({ id: 'VNC', name: 'Vila Nova de Cerveira', short: 'VNC', km: 114.0, x: 7480, y: 420, w: 130, desk: 3,
+  const VNC = station({ id: 'VNC', name: 'Vila Nova de Cerveira', short: 'VNC', km: 114.0, x: 7480 + XS, y: 420, w: 130, desk: 3,
     tr: [P('1', -8, 520, '1', { main: 1 }), P('2', 8, 520, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const VLC = station({ id: 'VLC', name: 'Valença', short: 'VLC', km: 126.5, x: 7900, y: 420, w: 170, desk: 3,
+  const VLC = station({ id: 'VLC', name: 'Valença', short: 'VLC', km: 126.5, x: 7900 + XS, y: 420, w: 170, desk: 3,
     tr: [P('3', -24, 400, '3'), P('1', -8, 500, '1', { main: 1 }), P('2', 8, 500, '2'), P('L', 24, 750)],
     W: [{ t: 'S', tr: [1, 0, 2, 3] }], E: [{ t: 'S', tr: [1, 0, 2, 3] }] });
-  // Douro
-  const PRD = station({ id: 'PRD', dirMain: 1, name: 'Paredes', short: 'PRD', km: 30.9, x: 2440, y: 1000, desk: 4,
+  // Douro: Ermesinde – Valongo – São Martinho do Campo – Paredes (double track), then single track to Régua
+  const VAL = station({ id: 'VAL', dirMain: 1, name: 'Valongo', short: 'VAL', km: 15.6, x: 2440, y: 1000, w: 100, desk: 4, vt: 120,
+    tr: [P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2', { main: 1 }), P('3', 24, 400, '3')],
+    W: [{ t: 'D', top: [0], bot: [1, 2] }], E: [{ t: 'D', top: [0], bot: [1, 2] }] });
+  const SMC = station({ id: 'SMC', dirMain: 1, name: 'São Martinho do Campo', short: 'SMC', km: 17.9, x: 2780, y: 1000, w: 70, desk: 4, vt: 120,
+    tr: [P('T', -24, 600, null, { term: 1 }), P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2', { main: 1 })],
+    W: [{ t: 'D', top: [1, 0], bot: [2] }], E: [{ t: 'D', top: [1], bot: [2] }] });
+  const PRD = station({ id: 'PRD', dirMain: 1, name: 'Paredes', short: 'PRD', km: 30.9, x: 2440 + XD, y: 1000, desk: 4,
     tr: [P('3', -24, 300, '3'), P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2', { main: 1 }), P('4', 24, 300, '4')],
     W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'D', top: [1, 0], bot: [2, 3] }] });
-  const CAI = station({ id: 'CAI', name: 'Caíde', short: 'CAI', km: 45.0, x: 2880, y: 1000, desk: 4,
+  const CAI = station({ id: 'CAI', name: 'Caíde', short: 'CAI', km: 45.0, x: 2880 + XD, y: 1000, desk: 4,
     tr: [P('3', -24, 260, '3'), P('1', -8, 320, '1', { main: 1 }), P('2', 8, 320, '2'), P('4', 24, 260, '4')],
     W: [{ t: 'D', top: [1, 0], bot: [2, 3] }], E: [{ t: 'S', tr: [1, 2] }] });
-  const LVR = station({ id: 'LVR', name: 'Livração', short: 'LVR', km: 52.4, x: 3300, y: 1000, w: 120, desk: 4, vt: 80,
+  const LVR = station({ id: 'LVR', name: 'Livração', short: 'LVR', km: 52.4, x: 3300 + XD, y: 1000, w: 120, desk: 4, vt: 80,
     tr: [P('1', -8, 400, '1', { main: 1 }), P('2', 8, 400, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const MCN = station({ id: 'MCN', name: 'Marco de Canaveses', short: 'MCN', km: 58.3, x: 3700, y: 1000, w: 150, desk: 4, vt: 60,
+  const MCN = station({ id: 'MCN', name: 'Marco de Canaveses', short: 'MCN', km: 58.3, x: 3700 + XD, y: 1000, w: 150, desk: 4, vt: 60,
     tr: [P('1', -16, 300, '1'), P('2', 0, 300, '2', { main: 1 }), P('3', 16, 300, '3')], W: [{ t: 'S', tr: [1, 0, 2] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
-  const MST = station({ id: 'MST', name: 'Mosteirô', short: 'MST', km: 70.0, x: 4140, y: 1000, w: 120, desk: 4, vt: 60,
+  const MST = station({ id: 'MST', name: 'Mosteirô', short: 'MST', km: 70.0, x: 4140 + XD, y: 1000, w: 120, desk: 4, vt: 60,
     tr: [P('1', -8, 350, '1', { main: 1 }), P('2', 8, 350, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const ARG = station({ id: 'ARG', name: 'Aregos', short: 'ARG', km: 77.5, x: 4560, y: 1000, w: 120, desk: 4, vt: 60,
+  const ARG = station({ id: 'ARG', name: 'Aregos', short: 'ARG', km: 77.5, x: 4560 + XD, y: 1000, w: 120, desk: 4, vt: 60,
     tr: [P('1', -8, 320, '1', { main: 1 }), P('2', 8, 320, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const ERD = station({ id: 'ERD', name: 'Ermida', short: 'ERD', km: 88.5, x: 4980, y: 1000, w: 120, desk: 4, vt: 60,
+  const ERD = station({ id: 'ERD', name: 'Ermida', short: 'ERD', km: 88.5, x: 4980 + XD, y: 1000, w: 120, desk: 4, vt: 60,
     tr: [P('1', -8, 300, '1', { main: 1 }), P('2', 8, 300, '2')], W: [{ t: 'S', tr: [0, 1] }], E: [{ t: 'S', tr: [0, 1] }] });
-  const GOD = station({ id: 'GOD', name: 'Godim', short: 'GOD', km: 99.6, x: 5300, y: 1000, w: 90, desk: 4, vt: 70,
+  const GOD = station({ id: 'GOD', name: 'Godim', short: 'GOD', km: 99.6, x: 5300 + XD, y: 1000, w: 90, desk: 4, vt: 70,
     tr: [P('T', -16, 600, null, { term: 1 }), P('1', 0, 300, '1', { main: 1 })], W: [{ t: 'S', tr: [1, 0] }], E: [{ t: 'S', tr: [1] }] });
-  const RGA = station({ id: 'RGA', name: 'Peso da Régua', short: 'RGA', km: 101.5, x: 5720, y: 1000, w: 170, desk: 4, vt: 50,
+  const RGA = station({ id: 'RGA', name: 'Peso da Régua', short: 'RGA', km: 101.5, x: 5720 + XD, y: 1000, w: 170, desk: 4, vt: 50,
     tr: [P('3', -24, 300, '3'), P('1', -8, 350, '1', { main: 1 }), P('2', 8, 350, '2'), P('4', 24, 300, '4')],
     W: [{ t: 'S', tr: [1, 0, 2, 3] }], E: [{ t: 'S', tr: [1, 0, 2] }] });
 
   // ── lines ──
   dline(SB, 0, CMP, 0, { v: 60, len: 2000 });
   dline(CMP, 0, CTM, 0, { v: 80, len: 1300 });
+  // Campanhã roads 5/6 ⇄ Contumil L1/L2: single line passing under the main lines
+  sline(CMP, CMP.ports.E[1], CTM, CTM.ports.W[1], { v: 60, len: 2100, kmA: 2.6, kmB: 4.6, ha: 4, hb: 4, under: true, via: [[1000, 724], [1110, 644]] });
   dline(CTM, 1, ERM, 1, { v: 120, halts: [{ n: 'Rio Tinto', km: 7.2 }, { n: 'Águas Santas/Palmilheira', km: 9.3 }] });
-  sline(LXS, LXS.ports.E[0], SGM, SGM.ports.W[0], { v: 50, len: 5200 });
-  sline(SGM, SGM.ports.E[1], CTM, CTM.ports.E[0], { v: 50, len: 2300, kmA: 7.5, kmB: 4.6, via: [[1420, 492], [1420, 600], [1300, 676]] });
+  sline(LXS, LXS.ports.E[0], LCB, LCB.ports.W[0], { v: 50 });
+  sline(LCB, LCB.ports.E[0], SGM, SGM.ports.W[0], { v: 60, halts: [{ n: 'Arroteia', km: 12.7 }, { n: 'São Mamede de Infesta', km: 11.6 }, { n: 'Hospital São João', km: 9.3 }] });
+  sline(SGM, SGM.ports.E[1], CTM, CTM.ports.E[0], { v: 50, len: 2300, kmA: 7.5, kmB: 4.6, via: [[1480, 492], [1480, 600], [1420, 644]] });
   sline(SGM, SGM.ports.E[0], ERM, ERM.ports.W[0], { v: 60, len: 4200, kmA: 7.5, kmB: 11.0, via: [[1500, 476], [1690, 640]] });
-  dline(ERM, 0, CIM, 0, { v: 140, via: [[2120, 684], [2250, 420]], halts: [{ n: 'São Romão', km: 13.1 }, { n: 'Travagem', km: 14.9 }] });
-  dline(CIM, 0, LEA, 0, { v: 140, halts: [{ n: 'São Frutuoso', km: 17.2 }] });
-  dline(LEA, 0, TRF, 0, { v: 140 });
+  dline(ERM, 0, CIM, 0, { v: 140, via: [[2120, 684], [2250, 420]], halts: [{ n: 'Travagem', km: 12.3 }] });
+  dline(CIM, 0, LEA, 0, { v: 140 });
+  dline(LEA, 0, SRM, 0, { v: 140, halts: [{ n: 'São Frutuoso', km: 15.7 }] });
+  dline(SRM, 0, TRF, 0, { v: 140, halts: [{ n: 'Portela', km: 21.2 }] });
   dline(TRF, 0, LSD, 0, { v: 140 });
   dline(LSD, 1, FML, 0, { v: 140, halts: [{ n: 'Esmeriz', km: 33.2 }] });
   dline(FML, 0, NIN, 0, { v: 140 });
-  dline(NIN, 0, TDM, 0, { v: 140, via: [[4485, 412], [4640, 170]], halts: [{ n: 'Arentim', km: 45.4 }] });
+  dline(NIN, 0, TDM, 0, { v: 140, via: [[4485 + XS, 412], [4640 + XS, 170]], halts: [{ n: 'Arentim', km: 45.4 }] });
   dline(TDM, 0, BRG, 0, { v: 140, halts: [{ n: 'Ruilhe', km: 50.0 }, { n: 'Mazagão', km: 52.2 }, { n: 'Aveleda', km: 54.0 }, { n: 'Ferreiros', km: 55.6 }] });
   sline(LSD, LSD.ports.E[0], STS, STS.ports.W[0], { v: 90, halts: [{ n: 'Caniços', km: 34.6 }] });
-  sline(STS, STS.ports.E[0], SMC, SMC.ports.W[0], { v: 90 });
-  sline(SMC, SMC.ports.E[0], VZL, VZL.ports.W[0], { v: 90, halts: [{ n: 'Vila das Aves', km: 41.0 }, { n: 'Lordelo', km: 44.2 }] });
+  sline(STS, STS.ports.E[0], VZL, VZL.ports.W[0], { v: 90, halts: [{ n: 'Vila das Aves', km: 41.0 }, { n: 'Lordelo', km: 44.2 }] });
   sline(VZL, VZL.ports.E[0], GMR, GMR.ports.W[0], { v: 90, halts: [{ n: 'Pereirinhas', km: 50.4 }, { n: 'Covas', km: 53.4 }] });
-  sline(NIN, NIN.ports.E[1], TML, TML.ports.W[0], { v: 100 });
-  sline(TML, TML.ports.E[0], BCL, BCL.ports.W[0], { v: 100 });
-  sline(BCL, BCL.ports.E[0], MDS, MDS.ports.W[0], { v: 100, halts: [{ n: 'Silva', km: 56.9 }] });
-  sline(MDS, MDS.ports.E[0], BRR, BRR.ports.W[0], { v: 100, halts: [{ n: 'Durrães', km: 59.8 }] });
+  sline(NIN, NIN.ports.E[1], MDS, MDS.ports.W[0], { v: 100, halts: [{ n: 'Carreira', km: 45.7 }] });
+  sline(MDS, MDS.ports.E[0], BCL, BCL.ports.W[0], { v: 100 });
+  sline(BCL, BCL.ports.E[0], TML, TML.ports.W[0], { v: 100, halts: [{ n: 'Silva', km: 55.0 }] });
+  sline(TML, TML.ports.E[0], BRR, BRR.ports.W[0], { v: 100, halts: [{ n: 'Durrães', km: 60.5 }] });
   sline(BRR, BRR.ports.E[0], DRQ, DRQ.ports.W[0], { v: 110, halts: [{ n: 'Alvarães', km: 67.0 }] });
   sline(DRQ, DRQ.ports.E[0], VCT, VCT.ports.W[0], { v: 110 });
   sline(VCT, VCT.ports.E[0], ANC, ANC.ports.W[0], { v: 100, halts: [{ n: 'Areosa', km: 83.4 }, { n: 'Carreço', km: 86.6 }, { n: 'Afife', km: 89.6 }] });
   sline(ANC, ANC.ports.E[0], CMN, CMN.ports.W[0], { v: 100, halts: [{ n: 'Moledo', km: 101.0 }] });
   sline(CMN, CMN.ports.E[0], VNC, VNC.ports.W[0], { v: 100, halts: [{ n: 'Seixas', km: 106.3 }, { n: 'Lanhelas', km: 109.7 }] });
   sline(VNC, VNC.ports.E[0], VLC, VLC.ports.W[0], { v: 100, halts: [{ n: 'Gondarém', km: 117.6 }, { n: 'São Pedro da Torre', km: 122.3 }] });
-  dline(ERM, 1, PRD, 0, { v: 120, via: [[2060, 716], [2300, 1000]], halts: [{ n: 'Valongo', km: 15.6 }, { n: 'Suzão', km: 18.2 }, { n: 'Recarei-Sobreira', km: 23.6 }, { n: 'Cête', km: 27.0 }] });
+  dline(ERM, 1, VAL, 0, { v: 120, via: [[2120, 716], [2260, 1000]], halts: [{ n: 'Suzão', km: 13.6 }] });
+  dline(VAL, 0, SMC, 0, { v: 120 });
+  dline(SMC, 0, PRD, 0, { v: 120, halts: [{ n: 'Terronhas', km: 19.9 }, { n: 'Trancoso', km: 21.4 }, { n: 'Recarei-Sobreira', km: 23.6 }, { n: 'Parada', km: 25.3 }, { n: 'Cête', km: 27.0 }] });
   dline(PRD, 0, CAI, 0, { v: 120, halts: [{ n: 'Penafiel', km: 37.4 }, { n: 'Bustelo', km: 39.9 }, { n: 'Meinedo', km: 42.1 }] });
   sline(CAI, CAI.ports.E[0], LVR, LVR.ports.W[0], { v: 90, halts: [{ n: 'Vila Caiz', km: 48.6 }] });
   sline(LVR, LVR.ports.E[0], MCN, MCN.ports.W[0], { v: 90 });
@@ -612,8 +641,8 @@ function buildNetwork() {
   sline(GOD, GOD.ports.E[0], RGA, RGA.ports.W[0], { v: 70 });
   // boundaries
   boundary('NORTE', '← Linha do Norte (Devesas)', CMP.ports.W[1], 'D', 'W', [[400, 860], [470, 716]], [330, 900], CMP);
-  boundary('TUI', 'Tui / Vigo (ADIF) →', VLC.ports.E[0], 'S', 'E', [], [8190, 420], VLC);
-  boundary('POC', 'Pinhão / Pocinho →', RGA.ports.E[0], 'S', 'E', [], [6000, 1000], RGA);
+  boundary('TUI', 'Tui / Vigo (ADIF) →', VLC.ports.E[0], 'S', 'E', [], [8190 + XS, 420], VLC);
+  boundary('POC', 'Pinhão / Pocinho →', RGA.ports.E[0], 'S', 'E', [], [6000 + XD, 1000], RGA);
   finalizePoints();
 }
 
@@ -744,7 +773,14 @@ function routeOK(t, r) {
   if (!r.edges.some(x => LOCE[loc].has(x.e))) return reach(r.last.e, r.last.d, loc);
   // the route takes the train into its next location: it must also be able to continue from there
   const after = t.plan[i + 1];
-  if (after && E(r.last.e).st === loc) return reach(r.last.e, t.plan[i].rev ? -r.last.d : r.last.d, after.loc);
+  // the route already runs through this place and out of it: it must head for the next one
+  if (after && E(r.last.e).st !== loc) return r.edges.some(x => LOCE[after.loc].has(x.e)) || reach(r.last.e, r.last.d, after.loc);
+  if (after && E(r.last.e).st === loc) {
+    // look a few places ahead (up to a reversal): a road can lead to the next station but nowhere beyond it
+    let k = i + 1; while (k < Math.min(t.plan.length - 1, i + 3) && !t.plan[k].rev) k++;
+    const d = t.plan[i].rev ? -r.last.d : r.last.d;
+    return reach(r.last.e, d, after.loc) && reach(r.last.e, d, t.plan[k].loc);
+  }
   return true;
 }
 // a long train that fits no siding at Y may still be sent if a through route across Y and onward
@@ -752,9 +788,9 @@ function routeOK(t, r) {
 function throughChain(t, homeSig, depth) {
   depth = depth || 1;
   const rv = t.plan.find((p, i) => i >= t.pi && p.rev), dest = (rv || t.plan[t.plan.length - 1]).loc;
-  const r2s = S(homeSig).routes.map(id => ROUTES[id]).filter(r => !canSet(r) && r.exit >= 0 && reach(r.last.e, r.last.d, dest)).sort((a, b) => a.div - b.div);
-  for (const r2 of r2s) for (const id3 of S(r2.exit).routes) {
-    const r3 = ROUTES[id3];
+  const pref = r => r.div + (r.edges.some(x => E(x.e).under) ? (t.svc.under ? -10 : 10) : 0);
+  const r2s = S(homeSig).routes.map(id => ROUTES[id]).filter(r => !canSet(r) && r.exit >= 0 && reach(r.last.e, r.last.d, dest)).sort((a, b) => pref(a) - pref(b));
+  for (const r2 of r2s) for (const r3 of S(r2.exit).routes.map(id => ROUTES[id]).sort((a, b) => pref(a) - pref(b))) {
     if (canSet(r3) || !(r3.edges.some(x => LOCE[dest].has(x.e)) || reach(r3.last.e, r3.last.d, dest))) continue;
     const Z = r3.exit >= 0 ? S(r3.exit).homeOf : null;
     if (!Z || freeFor(t, S(r3.exit), Z) - inboundTo(Z) >= 1) return [r2, r3];
@@ -1251,6 +1287,11 @@ function arsTick() {
         if (tgt.stop && le.st === tgt.loc && !le.plat && !goods(t)) continue;
         if (goods(t) && le.plat) score += 20;
         if (fin && le.main) score += 8;
+        if (le.st === 'CMP' || le.st === 'CTM') {
+          const u = ['5', '6', 'L1', 'L2'].includes(le.tname) && !(le.st === 'CTM' && le.tname === '5');
+          // the underpass roads carry the Devesas/Ovar ⇄ Leixões traffic; at Campanhã they are also where trains from Devesas turn back
+          if (t.svc.under) score += u ? -20 : 20; else if (fin && le.st === 'CMP') score += u ? -10 : 10; else if (u) score += 30;
+        }
         // plain double-track station: each main road belongs to one direction (top = away from Porto)
         const stL = NET.st[le.st];
         if (stL.dirMain && le.main && (r.last.d > 0) !== (N(le.a).y < stL.y)) continue;
@@ -1260,6 +1301,7 @@ function arsTick() {
         if (!tgt.stop && E(r.last.e).v < 80) score += 6;
         if (t.cat === 'SOC' && fin && !socReachFrom(t, le.id, r.last.d)) continue;
       }
+      if (r.edges.some(x => E(x.e).under)) score += t.svc.under ? -20 : 30; // the underpass is for Devesas/Ovar ⇄ Leixões traffic
       if (t.cat !== 'SOC' && (leadsToStranded(r) || heldForRescue(t, r))) continue;
       if (singleRoadBlocked(t, r) || reservedForInbound(t, r)) continue;
       cands.push({ r, score });
@@ -1770,21 +1812,21 @@ const PIECES = {
   SB_CMP: [['SB', 'CMP'], 60],
   CMP_CTM: [['CMP', 'CTM'], 80],
   CTM_ERM: [['CTM', 'Rio Tinto', 'Águas Santas/Palmilheira', 'ERM'], 120],
-  ERM_LSD: [['ERM', 'São Romão', 'Travagem', 'CIM', 'São Frutuoso', 'LEA', 'TRF', 'LSD'], 140],
+  ERM_LSD: [['ERM', 'Travagem', 'CIM', 'LEA', 'São Frutuoso', 'SRM', 'Portela', 'TRF', 'LSD'], 140],
   TRF_LSD: [['TRF', 'LSD'], 140],
   LSD_NIN: [['LSD', 'Esmeriz', 'FML', 'NIN'], 140],
   NIN_BRG: [['NIN', 'Arentim', 'TDM', 'Ruilhe', 'Mazagão', 'Aveleda', 'Ferreiros', 'BRG'], 140],
-  LSD_GMR: [['LSD', 'Caniços', 'STS', 'SMC', 'Vila das Aves', 'Lordelo', 'VZL', 'Pereirinhas', 'Covas', 'GMR'], 90],
-  NIN_TUI: [['NIN', 'TML', 'BCL', 'Silva', 'MDS', 'Durrães', 'BRR', 'Alvarães', 'DRQ', 'VCT', 'Areosa', 'Carreço', 'Afife', 'ANC', 'Moledo', 'CMN', 'Seixas', 'Lanhelas', 'VNC', 'Gondarém', 'São Pedro da Torre', 'VLC', 'TUI'], 100],
-  ERM_CAI: [['ERM', 'Valongo', 'Suzão', 'Recarei-Sobreira', 'Cête', 'PRD', 'Penafiel', 'Bustelo', 'Meinedo', 'CAI'], 120],
+  LSD_GMR: [['LSD', 'Caniços', 'STS', 'Vila das Aves', 'Lordelo', 'VZL', 'Pereirinhas', 'Covas', 'GMR'], 90],
+  NIN_TUI: [['NIN', 'Carreira', 'MDS', 'BCL', 'Silva', 'TML', 'Durrães', 'BRR', 'Alvarães', 'DRQ', 'VCT', 'Areosa', 'Carreço', 'Afife', 'ANC', 'Moledo', 'CMN', 'Seixas', 'Lanhelas', 'VNC', 'Gondarém', 'São Pedro da Torre', 'VLC', 'TUI'], 100],
+  ERM_CAI: [['ERM', 'Suzão', 'VAL', 'SMC', 'Terronhas', 'Trancoso', 'Recarei-Sobreira', 'Parada', 'Cête', 'PRD', 'Penafiel', 'Bustelo', 'Meinedo', 'CAI'], 120],
   CAI_MCN: [['CAI', 'Vila Caiz', 'LVR', 'MCN'], 90],
   MCN_POC: [['MCN', 'Juncal', 'Pala', 'MST', 'ARG', 'Barqueiros', 'ERD', 'Rede', 'GOD', 'RGA', 'POC'], 70],
   NORTE_CMP: [['NORTE', 'CMP'], 100],
-  LXS_SGM: [['LXS', 'SGM'], 50],
+  LXS_SGM: [['LXS', 'LCB', 'Arroteia', 'São Mamede de Infesta', 'Hospital São João', 'SGM'], 50],
   SGM_CTM: [['SGM', 'CTM'], 50],
   SGM_ERM: [['SGM', 'ERM'], 60],
 };
-const KMFIX = { 'LXS|SGM': 5.6, 'SGM|CTM': 2.6, 'SGM|ERM': 4.4 };
+const KMFIX = { 'SGM|CTM': 2.6, 'SGM|ERM': 4.4 };
 
 function resolveLoc(x) {
   if (NET.loc[x]) return x;
@@ -1840,7 +1882,8 @@ function mkSvc(num, cat, names, t0, stopFn, o) {
     } else plan.push({ loc: x.loc, t: Math.round(t / 30) * 30, dep: Math.round(t / 30) * 30, stop: false });
     prevStop = stop;
   });
-  const svc = { id: String(num), num: String(num), cat, plan, len: o.len, names, title: o.title,
+  const under = names.some(n => /NORTE_CMP/.test(n)) && names.some(n => /SGM_CTM/.test(n));
+  const svc = { id: String(num), num: String(num), cat, plan, len: o.len, names, title: o.title, under,
     origin: NET.loc[plan[0].loc].type === 'bound' ? 'bound' : 'st', next: null, linkedFrom: null };
   svc.spawnT = svc.origin === 'bound' ? plan[0].t : plan[0].dep - 480;
   svc.from = NET.loc[plan[0].loc].name; svc.to = NET.loc[plan[plan.length - 1].loc].name;
@@ -1850,7 +1893,7 @@ function mkSvc(num, cat, names, t0, stopFn, o) {
 
 const SCN = {
   wk: { id: 'wk', day: 'Terça-feira', label: 'Ponta da manhã', t0: T(5, 30), t1: T(10, 0),
-    note: 'Urbanos a cada 30 min para Braga e Aveiro, mercadorias para os terminais, um especial escolar com inversão em Trofa.' },
+    note: 'Urbanos a cada 30 min para Braga e Aveiro, Ovar ⇄ Leça do Balio, mercadorias para os terminais, um especial escolar com inversão em Trofa.' },
   sat: { id: 'sat', day: 'Sábado', label: 'Manhã calma', t0: T(7, 0), t1: T(11, 30),
     note: 'Metade dos urbanos, pouca carga. O Comboio do Vinho sai de Valença para a Régua e inverte em Campanhã.' },
   fri: { id: 'fri', day: 'Sexta-feira', label: 'Ponta da tarde', t0: T(16, 30), t1: T(21, 0),
@@ -1889,6 +1932,10 @@ function buildTimetable(scn) {
   // Urbanos de Aveiro (Linha do Norte) — terminam e invertem em Campanhã
   ser(18, pick(30, 60, 30)).forEach((t, i) => mkSvc(16001 + 2 * i, 'URB', ['NORTE_CMP'], t, all));
   ser(5, pick(30, 60, 30)).forEach((t, i) => mkSvc(16000 + 2 * i, 'URB', ['-NORTE_CMP'], t, all));
+  // Urbanos Ovar ⇄ Leça do Balio (Linha de Leixões), through the Campanhã underpass
+  const LECA = ['NORTE_CMP', 'CMP_CTM', '-SGM_CTM', '-LXS_SGM'];
+  ser(25, pick(60, 120, 60)).forEach((t, i) => cut(mkSvc(16101 + 2 * i, 'URB', LECA, t, all), 'LCB'));
+  ser(40, pick(60, 120, 60)).forEach((t, i) => cutStart(mkSvc(16100 + 2 * i, 'URB', revNames(LECA), t, all), 'LCB', t));
   // Regionais do Minho: Valença and Viana alternate (off > 60 = the odd hour)
   const regTo = (num, t0, end) => cut(mkSvc(num, 'REG', MINHO, t0, north), end);
   const regFrom = (num, t0, start) => cutStart(mkSvc(num, 'REG', revNames(MINHO), t0, north), start, t0);
@@ -1922,21 +1969,20 @@ function buildTimetable(scn) {
     DEV_MINHO: ['NORTE_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_LSD', 'LSD_NIN', 'NIN_BRG'],
     DEV_DOURO: ['NORTE_CMP', 'CMP_CTM', 'CTM_ERM', 'ERM_CAI', 'CAI_MCN', 'MCN_POC'],
     LX_MINHO: ['LXS_SGM', 'SGM_ERM', 'ERM_LSD'],
-    LX_GUIM: ['LXS_SGM', 'SGM_ERM', 'ERM_LSD', 'LSD_GMR'],
   };
   const none = () => false;
   // [number, corridor, reverse?, time, length, terminal to end at (outbound) or start from (return)]
   const goodsList = {
-    wk: [[62501, 'LX_TUI', 0, T(5, 50), 400], [62500, 'LX_TUI', 1, T(6, 30), 400], [54001, 'LX_NORTE', 1, T(6, 55), 600], [54003, 'LX_NORTE', 0, T(8, 40), 550],
+    wk: [[62501, 'LX_TUI', 0, T(5, 50), 400], [62500, 'LX_TUI', 1, T(6, 30), 400], [54001, 'LX_NORTE', 1, T(6, 55), 500], [54003, 'LX_NORTE', 0, T(8, 40), 500],
       [62503, 'DEV_TUI', 0, T(8, 0), 400],
       [69101, 'DEV_MINHO', 0, T(5, 55), 450, 'CIM'], [69102, 'DEV_MINHO', 1, T(8, 50), 450, 'CIM'],
       [69301, 'DEV_MINHO', 0, T(6, 40), 500, 'TDM'], [69302, 'DEV_MINHO', 1, T(9, 15), 500, 'TDM'],
       [69201, 'LX_MINHO', 0, T(7, 5), 500, 'LEA'], [69202, 'LX_MINHO', 1, T(9, 25), 500, 'LEA'],
-      [69601, 'LX_GUIM', 0, T(6, 10), 280, 'SMC'], [69602, 'LX_GUIM', 1, T(8, 45), 280, 'SMC']],
-    sat: [[62501, 'LX_TUI', 0, T(7, 20), 400], [54001, 'LX_NORTE', 1, T(8, 15), 600],
+      [69601, 'DEV_DOURO', 0, T(6, 10), 400, 'SMC'], [69602, 'DEV_DOURO', 1, T(8, 45), 400, 'SMC']],
+    sat: [[62501, 'LX_TUI', 0, T(7, 20), 400], [54001, 'LX_NORTE', 1, T(8, 15), 500],
       [69401, 'LX_TUI', 0, T(7, 40), 400, 'DRQ'], [69402, 'LX_TUI', 1, T(10, 35), 400, 'DRQ'],
       [69501, 'DEV_DOURO', 0, T(7, 30), 300, 'GOD']],
-    fri: [[62500, 'LX_TUI', 1, T(16, 50), 400], [54003, 'LX_NORTE', 0, T(17, 10), 550], [62503, 'DEV_TUI', 0, T(19, 40), 400],
+    fri: [[62500, 'LX_TUI', 1, T(16, 50), 400], [54003, 'LX_NORTE', 0, T(17, 10), 500], [62503, 'DEV_TUI', 0, T(19, 40), 400],
       [69401, 'LX_TUI', 0, T(16, 40), 400, 'DRQ'], [69402, 'LX_TUI', 1, T(19, 20), 400, 'DRQ'],
       [69502, 'DEV_DOURO', 1, T(17, 5), 300, 'GOD'],
       [69101, 'DEV_MINHO', 0, T(16, 45), 450, 'CIM'], [69102, 'DEV_MINHO', 1, T(19, 30), 450, 'CIM'],
@@ -2129,7 +2175,9 @@ function draw() {
     }
     cx.strokeStyle = edgeColor(e);
     cx.lineWidth = (e.stTrack ? 3.2 : 3) * px;
+    if (e.under) cx.setLineDash([7 * px, 4 * px]);
     cx.beginPath(); cx.moveTo(p[0][0], p[0][1]); for (let i = 1; i < p.length; i++) cx.lineTo(p[i][0], p[i][1]); cx.stroke();
+    cx.setLineDash([]);
     // CDV joints
     if (z > 0.7) { cx.fillStyle = '#04070c'; for (const q of [p[0], p[p.length - 1]]) cx.fillRect(q[0] - 0.6 * px, q[1] - 2.2 * px, 1.2 * px, 4.4 * px); }
     if (e.plat && z > 0.35) {
@@ -2141,6 +2189,7 @@ function draw() {
       cx.fillText(e.tname, a.x - 3 * px, a.y + 3 * px);
     }
   }
+  if (z > 0.6) { cx.font = `500 ${9 * px}px 'Barlow', sans-serif`; cx.fillStyle = COL.dim; cx.textAlign = 'left'; cx.fillText('passagem inferior', 1010, 740 + 4 * px); }
   // halts
   if (z > 0.3) for (const h of NET.halts) {
     if (!vis(h.x, h.y)) continue;
@@ -2507,9 +2556,11 @@ $('p-help').innerHTML = `
 <p><b>Clique num sinal principal</b> (com haste) para o escolher como sinal de entrada. Os destinos possíveis ficam com um anel ciano. <b>Clique no sinal de destino</b> ou na linha de destino para estabelecer o itinerário. As agulhas movem-se, a via fica verde e o sinal abre.</p>
 <p>Os itinerários libertam-se por troços à medida que o comboio avança. <b>Clique direito</b> num sinal para anular o itinerário (com temporização se houver comboio em aproximação), torná-lo permanente, ou autorizar a passagem de um comboio retido.</p>
 <p class="sec">Via única</p>
-<p>Entre Nine e Valença, Caíde e Régua, Lousado e Guimarães e na linha de Leixões, só um comboio ocupa cada cantão entre estações. Planeie os <b>cruzamentos</b>: deixe um comboio no desvio da estação de cruzamento antes de dar partida ao outro. No Minho cruza-se em Tamel, Barcelos, Midões, Barroselas, Viana, Âncora, Caminha e Cerveira. Darque, Godim e S. Martinho do Campo só têm uma linha de passagem: não servem para cruzar. Atenção ao comprimento dos desvios: um mercadorias de 450 m não cabe em Barroselas (420 m) nem em Âncora (380 m).</p>
+<p>Entre Nine e Valença, Caíde e Régua, Lousado e Guimarães e na linha de Leixões, só um comboio ocupa cada cantão entre estações. Planeie os <b>cruzamentos</b>: deixe um comboio no desvio da estação de cruzamento antes de dar partida ao outro. No Minho cruza-se em Midões, Barcelos, Tamel, Barroselas, Viana, Âncora, Caminha e Cerveira. Darque e Godim só têm uma linha de passagem: não servem para cruzar. Na via dupla, São Romão e Valongo têm uma terceira linha para resguardar um comboio e deixar passar outro. Atenção ao comprimento dos desvios: um mercadorias de 450 m não cabe em Barroselas (420 m) nem em Âncora (380 m).</p>
 <p class="sec">Terminais de mercadorias</p>
-<p>Cimpor, Leandro, Tadim, S. Martinho do Campo, Darque e Godim têm uma linha de terminal (<b>T</b>) com acesso do lado do Porto. O mercadorias de Devesas ou de Leixões entra na T, descarrega e regressa invertendo a marcha. A T não serve para cruzamentos.</p>
+<p>Cimpor, Leandro, Tadim (Minho e Ramal de Braga), S. Martinho do Campo (Douro), Darque e Godim têm uma linha de terminal (<b>T</b>) com acesso do lado do Porto. O mercadorias de Devesas ou de Leixões entra na T, descarrega e regressa invertendo a marcha. A T não serve para cruzamentos.</p>
+<p class="sec">Contumil e a passagem inferior</p>
+<p>Em Contumil, as linhas <b>L1</b> e <b>L2</b> servem só a Linha de Leixões. Para oeste juntam-se numa via única que passa por baixo das linhas principais e chega às linhas 5 e 6 de Campanhã, do lado de Devesas. É o caminho normal dos mercadorias Devesas ⇄ Leixões e dos urbanos Ovar ⇄ Leça do Balio. A L1 tem também agulhas para as linhas principais. A linha 1 de Contumil liga a Ermesinde e a Leixões.</p>
 <p class="sec">Comboios especiais e manobras</p>
 <p>Os especiais (<b>ESP</b>, lilás) são rebocados por locomotiva. Onde o horário marca <b>⇄ inversão</b> (por exemplo Campanhã, no Comboio do Vinho Valença → Régua), receba-os numa linha que tenha ao lado <b>outra linha livre</b>: a locomotiva contorna a composição por ela durante 10 min e essa linha fica reservada (azul claro). Sem linha adjacente livre, a manobra não começa.</p>
 <p class="sec">Socorro</p>
@@ -2645,10 +2696,10 @@ function openCtx(sx, sy) {
 
 // ── start / end ─────────────────────────────────────────────────────────────
 const DESKINFO = {
-  1: 'São Bento, Campanhã, Contumil (base do Socorro), Ermesinde, Leixões. Nó urbano denso, terminais e cruzamento de fluxos.',
-  2: 'Cimpor, Leandro, Trofa → Nine, Ramal de Braga (terminal de Tadim) e Linha de Guimarães (via única, terminal de S. Martinho do Campo).',
-  3: 'Nine → Valença, via única. Cruzamentos em Tamel e Midões, terminal de Darque, Celta e mercadorias de/para Espanha.',
-  4: 'Paredes → Régua. Via dupla até Caíde, depois via única com material diesel e o terminal de Godim.',
+  1: 'São Bento, Campanhã, Contumil (base do Socorro, passagem inferior), Ermesinde e a Linha de Leixões até Leça do Balio e Leixões.',
+  2: 'Travagem, Cimpor, Leandro, São Romão, Trofa → Nine, Ramal de Braga (terminal de Tadim) e Linha de Guimarães (via única).',
+  3: 'Nine → Valença, via única: Midões, Barcelos, Tamel, Barroselas. Terminal de Darque, Celta e mercadorias de/para Espanha.',
+  4: 'Valongo, S. Martinho do Campo (terminal), Paredes → Régua. Via dupla até Caíde, depois via única com o terminal de Godim.',
 };
 $('scnpick').innerHTML = Object.values(SCN).map(c =>
   `<label><input type="radio" name="scn" id="scn-${c.id}" value="${c.id}" ${c.id === SCNSEL ? 'checked' : ''}><em>${esc(c.day)}</em><b>${esc(c.label)}</b><time>${hhmm(c.t0)} – ${hhmm(c.t1)}</time><small>${esc(c.note)}</small></label>`).join('');
